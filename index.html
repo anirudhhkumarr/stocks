@@ -15,191 +15,184 @@
 
 <body>
     <div class="app-container">
-        <header>
-            <div class="logo">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M3 3V21H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" />
-                    <path d="M19 9L14 14L10 10L7 13" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                        stroke-linejoin="round" />
-                </svg>
-                <h1>Portfolio Analytics</h1>
-            </div>
-            <div class="header-inputs">
+        <div id="header-container"></div>
+
+        <!-- Actions Toolbar -->
+        <div class="actions-toolbar">
+            <div class="actions-group">
                 <div class="w2-input-wrapper">
                     <label for="w2Income">W2 Income</label>
-                    <input type="number" id="w2Income" placeholder="e.g. 150000" min="0">
+                    <input type="number" id="w2Income" placeholder="e.g. 150000" min="0" class="toolbar-input">
                 </div>
                 <div class="file-upload-wrapper">
                     <input type="file" id="csvInput" multiple accept=".csv" class="file-input">
-                    <label for="csvInput" class="file-label">
+                    <label for="csvInput" class="toolbar-btn">
                         <span class="icon">📂</span>
                         <span class="text">Upload CSVs</span>
                     </label>
                 </div>
             </div>
-        </header>
 
-        <div id="activeFiles" class="file-list-container hidden">
-            <!-- File chips injected here -->
+            <div id="activeFiles" class="file-chips"></div>
         </div>
 
-
-        <main id="dashboard" class="hidden">
-            <!-- Portfolio Summary + Allocation -->
-            <!-- Summary Ribbon (3 Pillars) -->
-            <section class="summary-ribbon">
-                <!-- Pillar 1: Valuation -->
-                <div class="stat-card">
-                    <div class="card-title">Portfolio Value</div>
-                    <div class="primary-value" id="totalValue">$0.00</div>
-
-                    <div class="valuation-progress">
-                        <div class="bar" id="valueProgressBar" style="width: 0%"></div>
+        <main class="container">
+            <!-- Dashboard Content -->
+            <div id="stocks-dashboard" class="dashboard-section active">
+                <!-- Empty State -->
+                <div id="emptyState" class="empty-state hidden">
+                    <div class="content">
+                        <h2>No Data Loaded</h2>
+                        <p>Upload your portfolio CSV files to visualize your data.</p>
                     </div>
+                </div>
 
-                    <div class="secondary-row">
-                        <div class="sub-metric">
-                            <span>Cost:</span>
-                            <span class="val" id="totalCostBasis">$0.00</span>
+                <div id="stocks-main-content">
+                    <!-- Summary Ribbon (3 Pillars) -->
+                    <section class="summary-ribbon">
+                        <!-- Pillar 1: Valuation -->
+                        <div class="stat-card">
+                            <div class="card-title">Portfolio Value</div>
+                            <div class="primary-value" id="totalValue">$0.00</div>
+
+                            <div class="valuation-progress">
+                                <div class="bar" id="valueProgressBar" style="width: 0%"></div>
+                            </div>
+
+                            <div class="secondary-row">
+                                <div class="sub-metric">
+                                    <span>Cost:</span>
+                                    <span class="val" id="totalCostBasis">$0.00</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
 
-                <!-- Pillar 2: Performance -->
-                <div class="stat-card">
-                    <div class="card-title">
-                        <span>Performance</span>
-                        <div class="trend-badge" id="trendBadge">
-                            <span id="totalGainPercent">0.00%</span>
+                        <!-- Pillar 2: Performance -->
+                        <div class="stat-card">
+                            <div class="card-title">
+                                <span>Performance</span>
+                                <div class="trend-badge" id="trendBadge">
+                                    <span id="totalGainPercent">0.00%</span>
+                                </div>
+                            </div>
+
+                            <div class="primary-value" id="totalGain">$0.00</div>
+
+                            <div class="secondary-row">
+                                <div class="sub-metric">
+                                    <span>XIRR:</span>
+                                    <span class="val xirr-tag" id="totalXirr">--</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="primary-value" id="totalGain">$0.00</div>
+                        <!-- Pillar 3: Efficiency -->
+                        <div class="stat-card">
+                            <div class="card-title">Tax Efficiency</div>
+                            <div class="primary-value" id="effectiveReturn">--</div>
 
-                    <div class="secondary-row">
-                        <div class="sub-metric">
-                            <span>XIRR:</span>
-                            <span class="val xirr-tag" id="totalXirr">--</span>
+                            <div class="split-legend">
+                                <span>Short Term</span>
+                                <span>Long Term</span>
+                            </div>
+                            <div class="gain-split-bar">
+                                <div class="segment st" id="barST" style="width: 50%"></div>
+                                <div class="segment lt" id="barLT" style="width: 50%"></div>
+                            </div>
+
+                            <div class="secondary-row">
+                                <div class="sub-metric">
+                                    <span class="val" id="effectiveReturnXirr">--</span>
+                                </div>
+                            </div>
                         </div>
-                    </div>
-                </div>
+                    </section>
 
-                <!-- Pillar 3: Efficiency -->
-                <div class="stat-card">
-                    <div class="card-title">Tax Efficiency</div>
-                    <div class="primary-value" id="effectiveReturn">--</div>
-
-                    <div class="split-legend">
-                        <span>Short Term</span>
-                        <span>Long Term</span>
-                    </div>
-                    <div class="gain-split-bar">
-                        <div class="segment st" id="barST" style="width: 50%"></div>
-                        <div class="segment lt" id="barLT" style="width: 50%"></div>
-                    </div>
-
-                    <div class="secondary-row">
-                        <div class="sub-metric">
-                            <span class="val" id="effectiveReturnXirr">--</span>
+                    <!-- Cumulative Chart -->
+                    <section class="charts-grid">
+                        <div class="card chart-card">
+                            <h3>Cumulative Investment</h3>
+                            <div class="chart-controls">
+                                <button class="filter-btn" data-range="1m">1M</button>
+                                <button class="filter-btn" data-range="1y">1Y</button>
+                                <button class="filter-btn" data-range="2y">2Y</button>
+                                <button class="filter-btn" data-range="5y">5Y</button>
+                                <button class="filter-btn active" data-range="max">Max</button>
+                                <button id="logScaleBtn" class="filter-btn" style="margin-left: 10px;">Log</button>
+                                <button id="yearlyTicksBtn" class="filter-btn">Years</button>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="cumulativeChart"></canvas>
+                            </div>
                         </div>
-                    </div>
-                </div>
-            </section>
+                        <div class="card chart-card">
+                            <h3>Tax Impact Simulator</h3>
+                            <div class="chart-container">
+                                <canvas id="taxSimChart"></canvas>
+                            </div>
 
-            <!-- Cumulative Chart -->
-            <section class="charts-grid">
-                <div class="card chart-card">
-                    <h3>Cumulative Investment</h3>
-                    <div class="chart-controls">
-                        <button class="filter-btn" data-range="1m">1M</button>
-                        <button class="filter-btn" data-range="1y">1Y</button>
-                        <button class="filter-btn" data-range="2y">2Y</button>
-                        <button class="filter-btn" data-range="5y">5Y</button>
-                        <button class="filter-btn active" data-range="max">Max</button>
-                        <button id="logScaleBtn" class="filter-btn" style="margin-left: 10px;">Log</button>
-                        <button id="yearlyTicksBtn" class="filter-btn">Years</button>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="cumulativeChart"></canvas>
-                    </div>
-                </div>
-                <div class="card chart-card">
-                    <h3>Tax Impact Simulator</h3>
-                    <div class="chart-container">
-                        <canvas id="taxSimChart"></canvas>
-                    </div>
+                            <div id="sliderContainer" class="slider-row" style="margin-top: 1rem; width: 100%;">
+                                <div class="range-container">
+                                    <input type="range" id="targetLiquidation" min="0" step="100" value="0"
+                                        class="slider">
+                                </div>
+                            </div>
 
-                    <div id="sliderContainer" class="slider-row" style="margin-top: 1rem; width: 100%;">
-                        <div class="range-container">
-                            <input type="range" id="targetLiquidation" min="0" step="100" value="0" class="slider">
+                            <div id="simStats" class="sim-stats hidden">
+                                <p>Net Liquidation Value: <span id="simTotalValue" class="value"></span></p>
+                                <p>Estimated Tax: <span id="simTotalTax" class="value"></span></p>
+                                <p>Effective Tax Rate: <span id="simEffectiveRate" class="value"></span></p>
+                            </div>
                         </div>
-                    </div>
 
-                    <div id="simStats" class="sim-stats hidden">
-                        <p>Net Liquidation Value: <span id="simTotalValue" class="value"></span></p>
-                        <p>Estimated Tax: <span id="simTotalTax" class="value"></span></p>
-                        <p>Effective Tax Rate: <span id="simEffectiveRate" class="value"></span></p>
-                    </div>
-                </div>
+                    </section>
 
-            </section>
-
-
-            </section>
-
-            <!-- Liquidation Plan Table (Full Width) -->
-            <section class="summary-section">
-                <div id="liquidationPlan" class="liquidation-plan hidden card">
-                    <h3>Liquidation Plan Output</h3>
-
-
-
-                    <div class="table-responsive">
-                        <table id="liquidationTable">
-                            <thead>
-                                <tr>
-                                    <th>Symbol</th>
-                                    <th>Qty</th>
-                                    <th>Market Value</th>
-                                    <th>Cost Basis</th>
-                                    <th>Est. Gain</th>
-                                    <th>Gain Type</th>
-                                    <th>Efficiency</th>
-                                    <th>Est. Tax</th>
-                                    <th>Date Acquired</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <!-- Rows injected by JS -->
-                            </tbody>
-                            <tfoot>
-                                <tr class="summary-row">
-                                    <td colspan="2" style="text-align: right; font-weight: bold;">TOTALS:</td>
-                                    <td id="planTotalProceeds" style="font-weight: bold;">$0.00</td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td></td>
-                                    <td id="planTotalTax" style="font-weight: bold;">$0.00</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
-                        </table>
-                    </div>
-                </div>
-            </section>
-
-            <div id="emptyState" class="empty-state">
-                <div class="content">
-                    <h2>No Data Loaded</h2>
-                    <p>Upload your stock CSV files to generate the dashboard.</p>
-                    <div class="upload-zone" id="dropZone">
-                        <p>Drag & Drop CSV files here</p>
-                    </div>
+                    <!-- Liquidation Plan Table (Full Width) -->
+                    <section class="summary-section">
+                        <div id="liquidationPlan" class="liquidation-plan hidden card">
+                            <h3>Liquidation Plan Output</h3>
+                            <div class="table-responsive">
+                                <table id="liquidationTable">
+                                    <thead>
+                                        <tr>
+                                            <th>Symbol</th>
+                                            <th>Qty</th>
+                                            <th>Market Value</th>
+                                            <th>Cost Basis</th>
+                                            <th>Est. Gain</th>
+                                            <th>Gain Type</th>
+                                            <th>Efficiency</th>
+                                            <th>Est. Tax</th>
+                                            <th>Date Acquired</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <!-- Rows injected by JS -->
+                                    </tbody>
+                                    <tfoot>
+                                        <tr class="summary-row">
+                                            <td colspan="2" style="text-align: right; font-weight: bold;">TOTALS:</td>
+                                            <td id="planTotalProceeds" style="font-weight: bold;">$0.00</td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td></td>
+                                            <td id="planTotalTax" style="font-weight: bold;">$0.00</td>
+                                            <td></td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+                        </div>
+                    </section>
                 </div>
             </div>
-            <script src="script.js?v=33"></script>
+        </main>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="header.js"></script>
+    <script src="script.js?v=37"></script>
 </body>
 
 </html>

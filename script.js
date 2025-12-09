@@ -10,32 +10,74 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentFullStats = []; // Store full history for filtering
     let isLogScale = false;
     let isYearlyTicks = false;
-    let charts = {}; // Store chart instances for cleanup
+    window.charts = {}; // Store chart instances for cleanup (GLOBAL)
     let activeLots = []; // Store active lots with live market values
+    // Tax Simulator State
+    let cachedSortedLots = null;
+    let cachedSimResults = null;
 
+    // Constants for 2024 Tax Brackets (MFJ)
+    const FED_BRACKETS = [
+        { limit: 23200, rate: 0.10 },
+        { limit: 94300, rate: 0.12 },
+        { limit: 201050, rate: 0.22 },
+        { limit: 383900, rate: 0.24 },
+        { limit: 487450, rate: 0.32 },
+        { limit: 731200, rate: 0.35 },
+        { limit: Infinity, rate: 0.37 }
+    ];
+
+    const FED_LTCG_BRACKETS = [
+        { limit: 94050, rate: 0.00 },
+        { limit: 583750, rate: 0.15 },
+        { limit: Infinity, rate: 0.20 }
+    ];
+
+    const NIIT_THRESHOLD = 250000;
+    const NIIT_RATE = 0.038;
+
+    // CA 2024 Brackets (Approximate)
+    const CA_BRACKETS = [
+        { limit: 20824, rate: 0.01 },
+        { limit: 49368, rate: 0.02 },
+        { limit: 77918, rate: 0.04 },
+        { limit: 108162, rate: 0.06 },
+        { limit: 136700, rate: 0.08 },
+        { limit: 349138, rate: 0.093 },
+        { limit: 418962, rate: 0.103 },
+        { limit: 698272, rate: 0.113 },
+        { limit: 1396542, rate: 0.123 },
+        { limit: Infinity, rate: 0.133 } // Mental Health handled separately if > 1M
+    ];
+    const CA_MENTAL_HEALTH_THRESHOLD = 1000000;
+    const CA_MENTAL_HEALTH_RATE = 0.01;
+
+    // Init
     // Init
     loadFilesFromStorage();
     setupChartControls();
     setupTaxSimulator();
-    if (Object.keys(storedFiles).length > 0) {
-        updateUI();
-    }
+
+    // Always call updateUI to set correct initial state
+    updateUI();
 
     // Drag & Drop Handlers
-    dropZone.addEventListener('dragover', (e) => {
-        e.preventDefault();
-        dropZone.classList.add('dragover');
-    });
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
 
-    dropZone.addEventListener('dragleave', () => {
-        dropZone.classList.remove('dragover');
-    });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
 
-    dropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('dragover');
-        handleFiles(e.dataTransfer.files);
-    });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+    }
 
     csvInput.addEventListener('change', (e) => {
         handleFiles(e.target.files);
@@ -76,18 +118,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function updateUI() {
         const filenames = Object.keys(storedFiles);
-        // console.log('Updating UI with files:', filenames);
+        const stocksMain = document.getElementById('stocks-main-content');
+        const stocksEmpty = document.getElementById('emptyState');
 
-        if (filenames.length === 0) {
-            dashboard.classList.add('hidden');
+        // Always 'remove hidden' from activeFilesContainer if there are files
+        if (filenames.length > 0) {
+            activeFilesContainer.classList.remove('hidden');
+            renderActiveFiles(filenames);
+        } else {
             activeFilesContainer.classList.add('hidden');
-            emptyState.classList.remove('hidden');
-            return;
         }
 
-        // Render File Chips
-        renderActiveFiles(filenames);
-        activeFilesContainer.classList.remove('hidden');
+        if (filenames.length === 0) {
+            stocksMain.classList.add('hidden');
+            stocksEmpty.classList.remove('hidden');
+            return;
+        }
 
         try {
             // Process and Render Dashboard
@@ -99,8 +145,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             renderDashboard(portfolioData);
-            dashboard.classList.remove('hidden');
-            emptyState.classList.add('hidden');
+
+            // Show content, Hide empty state
+            stocksMain.classList.remove('hidden');
+            stocksEmpty.classList.add('hidden');
 
             // Trigger Async History Fetch
             fetchAndRenderDashboard(portfolioData.lots, portfolioData.summary);
@@ -435,38 +483,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function fetchStockData(symbol) {
-        // Use AllOrigins proxy to bypass CORS for Yahoo Finance
-        // Cache for 10 minutes (windowed timestamp)
-        const cacheWindow = Math.floor(Date.now() / (10 * 60 * 1000));
-        const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=max&interval=1d&cache_window=${cacheWindow}`;
-        // Switch to corsproxy.io as allorigins.win was blocked
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
-
-        try {
-            const response = await fetch(proxyUrl);
-            if (!response.ok) throw new Error('Network response was not ok');
-            const json = await response.json();
-
-            const result = json.chart.result[0];
-            const quotes = result.indicators.quote[0];
-            const timestamps = result.timestamp;
-
-            // Map: DateString (YYYY-MM-DD) -> ClosePrice
-            const priceMap = {};
-            timestamps.forEach((ts, i) => {
-                if (quotes.close[i]) {
-                    const date = new Date(ts * 1000).toISOString().split('T')[0];
-                    priceMap[date] = quotes.close[i];
-                }
-            });
-            return priceMap;
-        } catch (e) {
-            console.warn(`Failed to fetch history for ${symbol}:`, e);
-            return null;
-        }
-    }
-
     function calculatePortfolioHistory(lots, priceHistory) {
         // 1. Determine Date Range
         const dates = lots.map(l => new Date(l.openDate));
@@ -545,15 +561,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         if (/,\s*$/.test(text)) a.push('');
         return a;
-    }
-
-    function cleanNum(str) {
-        if (!str) return "0";
-        return str.replace(/[$,%]/g, '');
-    }
-
-    function formatCurrency(num) {
-        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
     }
 
     function formatPercent(num) {
@@ -971,43 +978,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Tax Simulator ---
 
     // Constants for 2024 Tax Brackets (MFJ)
-    const FED_BRACKETS = [
-        { limit: 23200, rate: 0.10 },
-        { limit: 94300, rate: 0.12 },
-        { limit: 201050, rate: 0.22 },
-        { limit: 383900, rate: 0.24 },
-        { limit: 487450, rate: 0.32 },
-        { limit: 731200, rate: 0.35 },
-        { limit: Infinity, rate: 0.37 }
-    ];
 
-    const FED_LTCG_BRACKETS = [
-        { limit: 94050, rate: 0.00 },
-        { limit: 583750, rate: 0.15 },
-        { limit: Infinity, rate: 0.20 }
-    ];
 
-    const NIIT_THRESHOLD = 250000;
-    const NIIT_RATE = 0.038;
 
-    // CA 2024 Brackets (Approximate)
-    const CA_BRACKETS = [
-        { limit: 20824, rate: 0.01 },
-        { limit: 49368, rate: 0.02 },
-        { limit: 77918, rate: 0.04 },
-        { limit: 108162, rate: 0.06 },
-        { limit: 136700, rate: 0.08 },
-        { limit: 349138, rate: 0.093 },
-        { limit: 418962, rate: 0.103 },
-        { limit: 698272, rate: 0.113 },
-        { limit: 1396542, rate: 0.123 },
-        { limit: Infinity, rate: 0.133 } // Mental Health handled separately if > 1M
-    ];
-    const CA_MENTAL_HEALTH_THRESHOLD = 1000000;
-    const CA_MENTAL_HEALTH_RATE = 0.01;
-
-    let cachedSortedLots = null;
-    let cachedSimResults = null;
 
     function setupTaxSimulator() {
         // Load saved state

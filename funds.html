@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Analytics - Mutual Funds</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="summary.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    <div class="app-container">
+        <div id="header-container"></div>
+
+        <!-- Actions Toolbar -->
+        <div class="actions-toolbar">
+            <div class="actions-group">
+                <div class="input-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+                    <input type="text" id="mfSymbol" placeholder="Symbol (e.g. 0P0000XVJQ.BO)" list="mf-suggestions"
+                        class="toolbar-input" style="width: 200px;">
+                    <datalist id="mf-suggestions">
+                        <option value="0P0000XVJQ.BO">SBI Large Cap Fund</option>
+                        <option value="0P0000XW8F.BO">HDFC Mid Cap Fund</option>
+                        <option value="0P0000XVAE.BO">HDFC Large and Mid Cap Fund</option>
+                        <option value="0P0000XW7T.BO">HDFC Nifty 50 Index Fund</option>
+                        <option value="0P0000XW7U.BO">HDFC BSE Sensex Index Fund</option>
+                        <option value="0P0000XVWL.BO">Aditya Birla Sun Life Large Cap Fund</option>
+                        <option value="0P0000XVYC.BO">Aditya Birla Sun Life ELSS Tax Saver Fund</option>
+                        <option value="0P0000XVWD.BO">Aditya Birla Sun Life Flexi Cap Fund</option>
+                    </datalist>
+                </div>
+                <div class="input-group" style="flex-direction: row; align-items: center; gap: 0.5rem;">
+                    <input type="text" id="mfUnits" placeholder="Units (e.g. 100)" class="toolbar-input"
+                        style="width: 120px;">
+                </div>
+                <button id="addMfBtn" class="toolbar-btn">
+                    <span>+</span> Add Fund
+                </button>
+            </div>
+
+            <div id="activeMFs" class="file-chips"></div>
+        </div>
+
+        <main class="container">
+            <!-- MUTUAL FUNDS DASHBOARD -->
+            <div id="mf-dashboard" class="dashboard-section active">
+                <div id="mf-main-content">
+
+                    <!-- MF Summary Ribbon -->
+                    <section class="summary-ribbon" id="mf-summary"
+                        style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+                        <!-- Tile 1: INR Value -->
+                        <div class="stat-card" style="flex: 1;">
+                            <div class="card-title">Value (₹)</div>
+                            <div class="primary-value" id="mfTotalValue">₹0.00</div>
+                            <div class="sub-metric">Current Portfolio</div>
+                        </div>
+
+                        <!-- Tile 2: INR Return -->
+                        <div class="stat-card" style="flex: 1;">
+                            <div class="card-title">Return (₹)</div>
+                            <div class="primary-value" id="mfTotalGain">₹0.00</div>
+                            <div class="trend-badge" id="mfTrendBadge">
+                                <span id="mfTotalReturnPercent">0.00%</span>
+                            </div>
+                        </div>
+
+                        <!-- Tile 3: USD Value -->
+                        <div class="stat-card" style="flex: 1;">
+                            <div class="card-title">Value ($)</div>
+                            <div class="primary-value" id="mfTotalValueUSD">$0.00</div>
+                            <div class="sub-metric">@ <span id="usdRate">--</span></div>
+                        </div>
+
+                        <!-- Tile 4: USD Return -->
+                        <div class="stat-card" style="flex: 1;">
+                            <div class="card-title">Return ($)</div>
+                            <div class="primary-value" id="mfTotalGainUSD">$0.00</div>
+                            <div class="trend-badge" id="mfTrendBadgeUSD">
+                                <span id="mfTotalReturnPercentUSD">0.00%</span>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="charts-grid">
+                        <div class="card chart-card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Performance (INR)</h3>
+                                <div class="chart-controls">
+                                    <button class="filter-btn mf-filter" data-currency="INR" data-range="1y">1Y</button>
+                                    <button class="filter-btn mf-filter active" data-currency="INR"
+                                        data-range="3y">3Y</button>
+                                    <button class="filter-btn mf-filter" data-currency="INR" data-range="5y">5Y</button>
+                                    <button class="filter-btn mf-filter" data-currency="INR"
+                                        data-range="max">Max</button>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="mfChartINR"></canvas>
+                            </div>
+                        </div>
+                        <div class="card chart-card">
+                            <div
+                                style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <h3>Performance (USD)</h3>
+                                <div class="chart-controls">
+                                    <button class="filter-btn mf-filter" data-currency="USD" data-range="1y">1Y</button>
+                                    <button class="filter-btn mf-filter active" data-currency="USD"
+                                        data-range="3y">3Y</button>
+                                    <button class="filter-btn mf-filter" data-currency="USD" data-range="5y">5Y</button>
+                                    <button class="filter-btn mf-filter" data-currency="USD"
+                                        data-range="max">Max</button>
+                                </div>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="mfChartUSD"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- NEW: Allocation Chart -->
+                        <div class="card chart-card">
+                            <div class="card-header">
+                                <h3>Asset Allocation (INR)</h3>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="mfChartAllocation"></canvas>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+
+                <!-- MF Empty State -->
+                <div id="mf-emptyState" class="empty-state">
+                    <div class="content">
+                        <h2>No Mutual Funds</h2>
+                        <p>Add your Mutual Funds using the Yahoo Finance ticker.</p>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="utils.js"></script>
+    <script src="header.js"></script>
+    <script src="mfs.js"></script>
+</body>
+
+</html>
