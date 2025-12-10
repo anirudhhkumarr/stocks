@@ -306,26 +306,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Parse Header to find indices
             const headerCols = parseCSVLine(lines[headerIndex]).map(c => c.replace(/"/g, '').trim());
+            // qty: headerCols.indexOf('Quantity'),
+            // costBasis: headerCols.indexOf('Cost Basis'),
+            // Simplified Map - Only what we need
             const colMap = {
                 qty: headerCols.indexOf('Quantity'),
-                costBasis: headerCols.indexOf('Cost Basis'),
-                marketValue: headerCols.indexOf('Market Value'), // Keep for validation?
-                gainLoss: -1, // Will try 'Gain/Loss ($)' or similar
-                holdingPeriod: headerCols.indexOf('Holding Period')
+                costBasis: headerCols.indexOf('Cost Basis')
             };
-
-            // Handle variations in Gain/Loss column name
-            let glIndex = headerCols.findIndex(c => c.includes('Gain/Loss ($)') || c.includes('Gain/Loss') || c === 'G/L');
-            if (glIndex !== -1) colMap.gainLoss = glIndex;
-
-            // console.log(`Column Mapping for ${file.filename}:`, colMap);
 
             if (colMap.qty === -1 || colMap.costBasis === -1) {
                 console.error(`Missing required columns in ${file.filename}. Found:`, headerCols);
                 return;
             }
 
-            const maxColIndex = Math.max(colMap.qty, colMap.costBasis, colMap.marketValue, colMap.gainLoss, colMap.holdingPeriod);
+            // Check enough columns exist (max index)
+            const maxColIndex = Math.max(colMap.qty, colMap.costBasis);
+
             let validRows = 0;
 
             // Parse rows
@@ -338,7 +334,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cols = parseCSVLine(line);
 
                 if (cols.length <= maxColIndex) {
-                    // console.debug(`Skipping line ${i} (not enough columns):`, line);
                     continue;
                 }
 
@@ -356,21 +351,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const qty = parseFloat(cleanNum(cols[colMap.qty]));
                 const costBasis = parseFloat(cleanNum(cols[colMap.costBasis]));
-                const marketValue = parseFloat(cleanNum(cols[colMap.marketValue])) || 0;
-                const gainLoss = parseFloat(cleanNum(cols[colMap.gainLoss])) || 0;
-                const holdingPeriod = cols[colMap.holdingPeriod] ? cols[colMap.holdingPeriod].replace(/"/g, '').trim() : 'Unknown';
 
                 if (isNaN(qty)) continue;
 
-                // Create lot with initial CSV values, but we will override market info later
+                // Create lot with minimalistic data.
+                // Market Info & Term are populated dynamically later.
                 const lot = {
                     symbol,
                     openDate,
                     qty,
                     costBasis,
-                    marketValue, // Included but ignored for aggregation
-                    gainLoss,    // Included but ignored for aggregation
-                    holdingPeriod
+                    marketValue: 0,
+                    gainLoss: 0,
+                    holdingPeriod: 'Unknown' // Will be calc'd
                 };
 
                 allLots.push(lot);
@@ -447,13 +440,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 lot.marketValue = marketValue;
                 lot.gainLoss = gainLoss;
 
+                // Recalculate Holding Period based on Date
+                const openDate = new Date(lot.openDate);
+                const now = new Date();
+                const diffTime = now - openDate;
+                const diffDays = diffTime / (1000 * 60 * 60 * 24);
+                const term = diffDays > 365 ? 'Long Term' : 'Short Term';
+                lot.holdingPeriod = term; // Maintain for display/logic
+
                 // Aggregate Global
                 liveSummary.totalValue += marketValue;
                 liveSummary.totalGain += gainLoss;
 
-                if (lot.holdingPeriod === 'Short Term') {
+                if (term === 'Short Term') {
                     liveSummary.shortTermGain += gainLoss;
-                } else if (lot.holdingPeriod === 'Long Term') {
+                } else {
                     liveSummary.longTermGain += gainLoss;
                 }
 
@@ -810,7 +811,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 scales: {
                     y: {
                         grid: { color: '#2d3748' },
-                        ticks: { color: '#9ca3af', callback: v => '$' + v.toLocaleString() }
+                        ticks: {
+                            color: '#9ca3af',
+                            callback: v => '$' + Math.round(v).toLocaleString()
+                        }
                     },
                     x: {
                         grid: { display: false },
@@ -820,7 +824,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: { display: true, labels: { color: '#fff' } },
                     tooltip: {
-                        callbacks: { label: c => c.dataset.label + ': ' + formatCurrency(c.raw) }
+                        callbacks: { label: c => c.dataset.label + ': $' + Math.round(c.raw).toLocaleString() }
                     }
                 }
             }
@@ -919,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         grid: { color: '#2d3748' },
                         ticks: {
                             color: '#9ca3af',
-                            callback: v => '$' + v.toLocaleString()
+                            callback: v => '$' + Math.round(v).toLocaleString()
                         }
                     },
                     x: {
@@ -942,7 +946,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: { display: true, labels: { color: '#fff' } },
                     tooltip: {
-                        callbacks: { label: c => c.dataset.label + ': ' + formatCurrency(c.raw) }
+                        callbacks: { label: c => c.dataset.label + ': $' + Math.round(c.raw).toLocaleString() }
                     }
                 }
             }
@@ -1575,7 +1579,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         title: { display: true, text: 'Total Liquidation Amount ($)', color: '#9ca3af' },
                         ticks: {
                             color: '#9ca3af',
-                            callback: function (value) { return formatCurrency(value); }
+                            callback: function (value) { return '$' + Math.round(value).toLocaleString(); }
                         }
                     },
                     y: {
@@ -1583,7 +1587,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         position: 'left',
                         min: 0,
                         grid: { color: '#2d3748' },
-                        ticks: { color: '#9ca3af', callback: v => '$' + v.toLocaleString() }
+                        ticks: { color: '#9ca3af', callback: v => '$' + Math.round(v).toLocaleString() }
                     },
                     y1: {
                         type: 'linear',
@@ -1602,9 +1606,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         callbacks: {
                             label: c => {
                                 if (c.dataset.yAxisID === 'y1') {
-                                    return `${c.dataset.label}: ${c.raw.y.toFixed(2)}%`;
+                                    return `${c.dataset.label}: ${c.raw.y.toFixed(1)}%`;
                                 }
-                                return `${c.dataset.label}: ${formatCurrency(c.raw.y)}`;
+                                return `${c.dataset.label}: $${Math.round(c.raw.y).toLocaleString()}`;
                             },
                             title: c => `Sold: ${c[0].raw.lot.symbol}`
                         }

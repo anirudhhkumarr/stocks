@@ -452,6 +452,12 @@ header {
     color: var(--text-primary);
 }
 
+.filter-btn.active {
+    background: var(--accent-color);
+    color: white;
+    border-color: var(--accent-color);
+}
+
 /* Slider Styles */
 .range-container {
     display: flex;

@@ -45,7 +45,7 @@ function cleanNum(str) {
 }
 
 function formatCurrency(num) {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Math.round(num));
 }
 
 // Add these to window to ensure global access if strictly needed, 

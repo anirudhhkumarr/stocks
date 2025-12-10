@@ -235,8 +235,8 @@ function renderMetrics() {
     const percent = startValue > 0 ? (gain / startValue) * 100 : 0;
 
     // Updates
-    const fmtINR = (n) => '₹' + n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
-    const fmtUSD = (n) => '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+    const fmtINR = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
+    const fmtUSD = (n) => '$' + Math.round(n).toLocaleString('en-US');
 
     const elVal = document.getElementById('mfTotalValue');
     const elGainLabel = document.querySelector('#mfTotalGain').parentElement.querySelector('.card-title');
@@ -394,13 +394,19 @@ function renderMFCharts() {
                 plugins: {
                     tooltip: {
                         callbacks: {
-                            label: (ctx) => (id.includes('USD') ? '$' : '₹') + ctx.raw.toFixed(2)
+                            label: (ctx) => (id.includes('USD') ? '$' : '₹') + Math.round(ctx.raw).toLocaleString()
                         }
                     }
                 },
                 scales: {
                     x: { grid: { display: false, color: '#2d3748' }, ticks: { color: '#9ca3af' } },
-                    y: { grid: { color: '#2d3748' }, ticks: { color: '#9ca3af' } }
+                    y: {
+                        grid: { color: '#2d3748' },
+                        ticks: {
+                            color: '#9ca3af',
+                            callback: (val) => (id.includes('USD') ? '$' : '₹') + Math.round(val).toLocaleString()
+                        }
+                    }
                 }
             }
         });
@@ -480,7 +486,7 @@ function renderAllocationChart() {
                             const val = ctx.raw;
                             const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
                             const pct = ((val / total) * 100).toFixed(1) + '%';
-                            return ` ₹${val.toLocaleString()} (${pct})`;
+                            return ` ₹${Math.round(val).toLocaleString()} (${pct})`;
                         }
                     }
                 }
