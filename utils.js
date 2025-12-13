@@ -5,8 +5,12 @@ window.charts = {}; // Store chart instances locally per page load
 async function fetchStockData(symbol) {
     // Use AllOrigins proxy to bypass CORS for Yahoo Finance
     const cacheWindow = Math.floor(Date.now() / (10 * 60 * 1000));
-    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=max&interval=1d&cache_window=${cacheWindow}`;
+    // Inject cache buster directly into Target URL to force Proxy re-fetch
+    const nowEpoch = Math.floor(Date.now() / 1000) + 86400; // Add 1 day buffer
+    const targetUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=0&period2=${nowEpoch}&interval=1d&events=history&includeAdjustedClose=true&_cb=${Date.now()}`;
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+
+    console.log(`Fetching: ${symbol} [${new Date().toLocaleTimeString()}]`);
 
     try {
         const response = await fetch(proxyUrl);
@@ -21,7 +25,9 @@ async function fetchStockData(symbol) {
         const priceMap = {};
         timestamps.forEach((ts, i) => {
             if (quotes.close[i]) {
-                const date = new Date(ts * 1000).toISOString().split('T')[0];
+                // Add 12h (43200s) to center the time to noon UTC, preventing date shift 
+                // for markets where midnight local time is previous day UTC.
+                const date = new Date((ts + 43200) * 1000).toISOString().split('T')[0];
                 priceMap[date] = quotes.close[i];
             }
         });
