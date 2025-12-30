@@ -40,7 +40,6 @@ const Toolbar = ({ w2Income, setW2Income, files, onFileUpload, onFileRemove }) =
           <label
             htmlFor="csvInput"
             className="toolbar-btn"
-            onClick={() => fileInputRef.current?.click()}
           >
             <Upload size={18} className="icon" />
             <span className="text">Upload CSVs</span>
