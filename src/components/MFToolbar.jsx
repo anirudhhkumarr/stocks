@@ -50,18 +50,6 @@ const MFToolbar = ({ onAddMF }) => {
                     <Plus size={18} />
                     <span>Add Fund</span>
                 </button>
-                <button
-                    className="toolbar-btn danger"
-                    onClick={() => {
-                        if (confirm('Clear all local data and reset defaults?')) {
-                            localStorage.clear();
-                            window.location.reload();
-                        }
-                    }}
-                    style={{ marginLeft: 'auto' }}
-                >
-                    Reset
-                </button>
             </div>
         </div>
     );

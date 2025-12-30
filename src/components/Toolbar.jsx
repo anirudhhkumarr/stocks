@@ -45,18 +45,6 @@ const Toolbar = ({ w2Income, setW2Income, files, onFileUpload, onFileRemove }) =
             <span className="text">Upload CSVs</span>
           </label>
         </div>
-        <button
-          className="toolbar-btn danger"
-          onClick={() => {
-            if (confirm('Clear all local data and reset defaults?')) {
-              localStorage.clear();
-              window.location.reload();
-            }
-          }}
-          style={{ marginLeft: 'auto' }}
-        >
-          Reset
-        </button>
       </div>
 
       <div id="activeFiles" className="file-chips">

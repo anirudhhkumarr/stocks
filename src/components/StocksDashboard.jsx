@@ -43,6 +43,9 @@ const StocksDashboard = () => {
                     setFiles(newFilesMap);
                 }
             };
+            reader.onerror = (err) => {
+                console.error('Error reading file:', file.name, err);
+            };
             reader.readAsText(file);
         });
     };
@@ -61,27 +64,31 @@ const StocksDashboard = () => {
     }, [files]);
 
     // Fetch prices when portfolio symbols change
+    // Use stringified symbols as dependency to avoid infinite loop from object reference changes
+    const symbolsKey = Object.keys(portfolio.summary.stocks).sort().join(',');
     useEffect(() => {
-        const symbols = Object.keys(portfolio.summary.stocks);
+        const symbols = symbolsKey.split(',').filter(s => s);
         if (symbols.length === 0) return;
 
         const fetchAll = async () => {
             setLoading(true);
-            const newPrices = { ...prices };
+            const newPrices = {};
             await Promise.all(symbols.map(async (symbol) => {
-                if (!newPrices[symbol]) {
+                if (!prices[symbol]) {
                     const data = await fetchStockData(symbol);
                     if (data) newPrices[symbol] = data;
                 }
             }));
-            setPrices(newPrices);
+            if (Object.keys(newPrices).length > 0) {
+                setPrices(prev => ({ ...prev, ...newPrices }));
+            }
             setLoading(false);
         };
 
         fetchAll();
-    }, [portfolio.summary.stocks]);
+    }, [symbolsKey]);
 
-    // Calculate Derivatives
+    // Helper to get latest price for a symbol
     const getLatestPrice = useCallback((symbol) => {
         const history = prices[symbol];
         if (!history) return 0;
@@ -89,28 +96,32 @@ const StocksDashboard = () => {
         return history[dates[dates.length - 1]] || 0;
     }, [prices]);
 
-    const activeLots = portfolio.lots.map(lot => {
-        const currentPrice = getLatestPrice(lot.symbol);
-        const marketValue = currentPrice * lot.qty;
-        const gainLoss = marketValue - lot.costBasis;
+    // Calculate Derivatives (memoized to prevent infinite loops)
+    const activeLots = React.useMemo(() => {
+        return portfolio.lots.map(lot => {
+            const currentPrice = getLatestPrice(lot.symbol);
+            const marketValue = currentPrice * lot.qty;
+            const gainLoss = marketValue - lot.costBasis;
 
-        // Holding period
-        const openDate = new Date(lot.openDate);
-        const today = new Date();
-        const diffYears = (today - openDate) / (1000 * 60 * 60 * 24 * 365.25);
-        const holdingPeriod = diffYears >= 1 ? 'Long Term' : 'Short Term';
+            // Holding period
+            const openDate = new Date(lot.openDate);
+            const today = new Date();
+            const diffYears = (today - openDate) / (1000 * 60 * 60 * 24 * 365.25);
+            const holdingPeriod = diffYears >= 1 ? 'Long Term' : 'Short Term';
 
-        return { ...lot, marketValue, gainLoss, holdingPeriod };
-    });
+            return { ...lot, marketValue, gainLoss, holdingPeriod };
+        });
+    }, [portfolio.lots, getLatestPrice]);
 
     const totalValue = activeLots.reduce((sum, l) => sum + l.marketValue, 0);
     const totalCost = activeLots.reduce((sum, l) => sum + l.costBasis, 0);
     const totalGain = totalValue - totalCost;
     const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-    // Tax Sim Logic
+    // Tax Sim Logic - use primitive count as dependency to avoid infinite loop
+    const lotsCount = activeLots.length;
     useEffect(() => {
-        if (activeLots.length === 0 || totalValue === 0) return;
+        if (lotsCount === 0 || totalValue === 0) return;
 
         const baseTax = calculateTotalTax(w2Income, 0);
         const augmentedLots = activeLots.map(lot => {
@@ -129,7 +140,7 @@ const StocksDashboard = () => {
             points.push({ x: cumP, y: cumT, basis: cumB, lot });
         });
         setTaxSimData(points);
-    }, [activeLots, w2Income]);
+    }, [lotsCount, totalValue, w2Income]);
 
     // Combined Stats
     const stats = {
@@ -156,12 +167,13 @@ const StocksDashboard = () => {
         running += pt.lot.marketValue;
     }
 
-    // History Data Prep (Mocking for now, will refine)
+    // History Data Prep
+    const pricesCount = Object.keys(prices).length;
     useEffect(() => {
-        if (Object.keys(prices).length === 0) return;
-        // Simple logic to aggregate values over time
-        // For brevity in this implementation call, I'll generate some dummy points based on latest
-        const dates = Object.keys(prices[Object.keys(prices)[0]] || {}).sort();
+        if (pricesCount === 0 || lotsCount === 0) return;
+
+        const firstSymbol = Object.keys(prices)[0];
+        const dates = Object.keys(prices[firstSymbol] || {}).sort();
         const hist = dates.map(date => {
             let v = 0, c = 0;
             activeLots.forEach(lot => {
@@ -172,7 +184,7 @@ const StocksDashboard = () => {
             return { date, value: v, cost: c, netValue: v * 0.85 }; // netValue mock
         });
         setHistoryData(hist);
-    }, [prices, activeLots]);
+    }, [pricesCount, lotsCount]);
 
     return (
         <div className="stocks-dashboard">
