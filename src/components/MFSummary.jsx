@@ -6,32 +6,48 @@ const MFSummary = ({ stats, usdRate }) => {
         <section className="summary-ribbon" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
             {/* Pillar 1: INR Valuation */}
             <div className="stat-card">
-                <div className="card-title">Portfolio Valuation (INR)</div>
+                <div className="card-title">
+                    Portfolio Valuation (INR)
+                    {stats.xirrINR > 0 && <span className="xirr-tag">{stats.xirrINR.toFixed(1)}% XIRR</span>}
+                </div>
                 <div className="primary-value" style={{ color: '#10b981' }}>{fmtINR(stats.totalValueINR)}</div>
-                <div className="secondary-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                    <span className={`trend-badge ${stats.gainINR >= 0 ? 'positive' : 'negative'}`} style={{ padding: '4px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: '600' }}>
-                        {stats.gainPctINR >= 0 ? '▲' : '▼'} {Math.abs(stats.gainPctINR).toFixed(1)}%
-                    </span>
-                    <span style={{ color: '#6b7280', fontSize: '12px' }}>{rangeLabel} Performance</span>
+                <div className="secondary-row">
+                    <div className="sub-metric">
+                        <span className={`trend-badge ${stats.gainINR >= 0 ? 'positive' : 'negative'}`}>
+                            {stats.gainPctINR >= 0 ? '▲' : '▼'} {Math.abs(stats.gainPctINR).toFixed(1)}%
+                        </span>
+                    </div>
+                    <div className="sub-metric">
+                        <span className="val">{fmtINR(stats.totalInvestedINR)}</span>
+                        <span>Invested</span>
+                    </div>
                 </div>
             </div>
 
             {/* Pillar 2: USD Valuation */}
             <div className="stat-card">
-                <div className="card-title">Portfolio Valuation (USD)</div>
-                <div className="primary-value" style={{ color: '#3b82f6' }}>${stats.totalValueUSD.toLocaleString('en-US', { maximumFractionDigits: 0 })}</div>
-                <div className="secondary-row" style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
-                    <span className={`trend-badge ${stats.gainUSD >= 0 ? 'positive' : 'negative'}`} style={{ padding: '4px 8px', borderRadius: '10px', fontSize: '12px', fontWeight: '600' }}>
-                        {stats.gainPctUSD >= 0 ? '▲' : '▼'} {Math.abs(stats.gainPctUSD).toFixed(1)}%
-                    </span>
-                    <span style={{ color: '#6b7280', fontSize: '12px' }}>{rangeLabel} Performance</span>
+                <div className="card-title">
+                    Portfolio Valuation (USD)
+                    {stats.xirrUSD > 0 && <span className="xirr-tag">{stats.xirrUSD.toFixed(1)}% XIRR</span>}
+                </div>
+                <div className="primary-value" style={{ color: '#3b82f6' }}>${Math.round(stats.totalValueUSD).toLocaleString()}</div>
+                <div className="secondary-row">
+                    <div className="sub-metric">
+                        <span className={`trend-badge ${stats.gainUSD >= 0 ? 'positive' : 'negative'}`}>
+                            {stats.gainPctUSD >= 0 ? '▲' : '▼'} {Math.abs(stats.gainPctUSD).toFixed(1)}%
+                        </span>
+                    </div>
+                    <div className="sub-metric">
+                        <span className="val">${Math.round(stats.totalInvestedUSD).toLocaleString()}</span>
+                        <span>Invested</span>
+                    </div>
                 </div>
             </div>
 
             {/* Pillar 3: Returns & Context */}
             <div className="stat-card">
                 <div className="card-title">{rangeLabel} Net Return</div>
-                <div className={`primary-value ${stats.gainINR >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '24px' }}>
+                <div className={`primary-value ${stats.gainINR >= 0 ? 'positive' : 'negative'}`} style={{ fontSize: '2.25rem' }}>
                     {stats.gainINR >= 0 ? '+' : ''}{fmtINR(stats.gainINR)}
                 </div>
                 <div className="metric-row" style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>

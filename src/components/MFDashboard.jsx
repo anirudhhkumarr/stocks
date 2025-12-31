@@ -6,6 +6,7 @@ import MFPortfolioGrowthChart from './MFPortfolioGrowthChart';
 import MFAllocationChart from './MFAllocationChart';
 import { fetchStockData } from '../utils/api';
 import { FUND_METADATA } from '../utils/mfUtils';
+import { calculateXIRR } from '../utils/calculations';
 
 const MFDashboard = () => {
     const [activeMFs, setActiveMFs] = useState(() => {
@@ -140,13 +141,39 @@ const MFDashboard = () => {
         const startUSD = startINR / rateStart;
         const gainUSD = currentUSD - startUSD;
 
+        // XIRR Calculation
+        const inrLots = activeMFs.map(mf => ({
+            costBasis: mf.costBasis,
+            openDate: mf.openDate
+        }));
+        const xirrINR = calculateXIRR(inrLots, currentINR);
+
+        const usdLots = activeMFs.map(mf => {
+            const purchaseRate = usdInr[mf.openDate] || latestRate;
+            return {
+                costBasis: mf.costBasis / purchaseRate,
+                openDate: mf.openDate
+            };
+        });
+        const xirrUSD = calculateXIRR(usdLots, currentUSD);
+
+        const totalInvestedINR = activeMFs.reduce((acc, mf) => acc + (mf.costBasis || 0), 0);
+        const totalInvestedUSD = activeMFs.reduce((acc, mf) => {
+            const purchaseRate = usdInr[mf.openDate] || latestRate;
+            return acc + (mf.costBasis / purchaseRate);
+        }, 0);
+
         return {
             totalValueINR: currentINR,
+            totalInvestedINR,
             gainINR,
             gainPctINR: startINR > 0 ? (gainINR / startINR) * 100 : 0,
+            xirrINR: xirrINR ? xirrINR * 100 : 0,
             totalValueUSD: currentUSD,
+            totalInvestedUSD,
             gainUSD,
             gainPctUSD: startUSD > 0 ? (gainUSD / startUSD) * 100 : 0,
+            xirrUSD: xirrUSD ? xirrUSD * 100 : 0,
             range
         };
     }, [filteredDates, activeMFs, mfData, usdInr, latestRate, range]);
