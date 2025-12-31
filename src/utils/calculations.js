@@ -12,6 +12,14 @@ export function formatCurrency(num) {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(Math.round(num));
 }
 
+export function formatINRShort(num) {
+    const val = Math.abs(num);
+    if (val >= 10000000) return (num / 10000000).toFixed(2) + ' Cr';
+    if (val >= 100000) return (num / 100000).toFixed(2) + ' L';
+    if (val >= 1000) return (num / 1000).toFixed(1) + 'k';
+    return Math.round(num).toString();
+}
+
 export function formatPercent(num) {
     return num.toFixed(2) + '%';
 }

@@ -1,8 +1,5 @@
-
-
 const MFSummary = ({ stats, usdRate }) => {
     const fmtINR = (n) => '₹' + Math.round(n).toLocaleString('en-IN');
-
     const rangeLabel = stats.range ? stats.range.toUpperCase() : '1Y';
 
     return (

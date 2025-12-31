@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
+import { formatINRShort } from '../utils/calculations';
 
 const MFPortfolioGrowthChart = ({ inrData, usdData, range, setRange }) => {
     const svgRef = useRef(null);
@@ -132,7 +133,7 @@ const MFPortfolioGrowthChart = ({ inrData, usdData, range, setRange }) => {
                     if (visibleSeries.includes('INR')) {
                         const yVal = yINR(dI.y);
                         trackINR.attr('cy', yVal).style('display', null);
-                        labelINR.attr('y', yVal - 8).text('₹' + Math.round(dI.y / 1000) + 'k').style('display', null);
+                        labelINR.attr('y', yVal - 8).text('₹' + formatINRShort(dI.y)).style('display', null);
                         if (tx > innerWidth - 60) labelINR.attr('x', -8).attr('text-anchor', 'end');
                         else labelINR.attr('x', 8).attr('text-anchor', 'start');
                     } else {
@@ -163,7 +164,7 @@ const MFPortfolioGrowthChart = ({ inrData, usdData, range, setRange }) => {
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
             svg.append('g')
-                .call(d3.axisLeft(yINR).ticks(5).tickFormat(d => '₹' + Math.round(d / 1000) + 'k'))
+                .call(d3.axisLeft(yINR).ticks(5).tickFormat(d => '₹' + formatINRShort(d)))
                 .call(g => g.select(".domain").remove())
                 .selectAll('text').style('fill', '#10b981').style('font-size', '11px');
 
