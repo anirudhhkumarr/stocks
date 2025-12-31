@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import Toolbar from './Toolbar';
 import SummaryRibbon from './SummaryRibbon';
 import PortfolioChart from './PortfolioChart';
@@ -6,20 +6,19 @@ import TaxSimulator from './TaxSimulator';
 import LiquidationTable from './LiquidationTable';
 import { processPortfolioData } from '../utils/dataProcessor';
 import { fetchStockData } from '../utils/api';
-import { calculateTotalTax, calculateXIRR } from '../utils/calculations';
+import { calculateXIRR } from '../utils/calculations';
 
 const StocksDashboard = () => {
     const [files, setFiles] = useState(() => {
         try {
             const saved = localStorage.getItem('portfolio_files');
             return saved ? JSON.parse(saved) : {};
-        } catch (e) { return {}; }
+        } catch { return {}; }
     });
     const [portfolio, setPortfolio] = useState({ lots: [], summary: { totalCost: 0, stocks: {} } });
     const [prices, setPrices] = useState({});
     const [w2Income, setW2Income] = useState(() => parseFloat(localStorage.getItem('w2Income')) || 175000);
     const [targetAmount, setTargetAmount] = useState(() => parseFloat(localStorage.getItem('targetLiquidation')) || 0);
-    const [loading, setLoading] = useState(false);
     const [historyData, setHistoryData] = useState([]);
     const [taxSimData, setTaxSimData] = useState([]);
 
@@ -70,7 +69,6 @@ const StocksDashboard = () => {
         if (symbols.length === 0) return;
 
         const fetchAll = async () => {
-            setLoading(true);
             const newPrices = {};
             await Promise.all(symbols.map(async (symbol) => {
                 if (!prices[symbol]) {
@@ -81,10 +79,10 @@ const StocksDashboard = () => {
             if (Object.keys(newPrices).length > 0) {
                 setPrices(prev => ({ ...prev, ...newPrices }));
             }
-            setLoading(false);
         };
 
         fetchAll();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [symbolsKey]);
 
     // Helper to get latest price for a symbol
@@ -96,7 +94,7 @@ const StocksDashboard = () => {
     }, [prices]);
 
     // Calculate Derivatives
-    const activeLots = React.useMemo(() => {
+    const activeLots = useMemo(() => {
         return portfolio.lots.map(lot => {
             const currentPrice = getLatestPrice(lot.symbol);
             const marketValue = currentPrice * lot.qty;
@@ -212,6 +210,7 @@ const StocksDashboard = () => {
             });
         });
         setTaxSimData(points);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lotsCount, totalValue, w2Income]);
 
     // Combined Stats
@@ -274,6 +273,7 @@ const StocksDashboard = () => {
             return { date, value: v || 0, cost: c || 0, netValue: (v || 0) * 0.85 };
         });
         setHistoryData(hist);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pricesCount, lotsCount]);
 
     return (

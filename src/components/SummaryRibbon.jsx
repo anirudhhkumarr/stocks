@@ -1,4 +1,3 @@
-import React from 'react';
 import { formatCurrency, formatPercent } from '../utils/calculations';
 
 const SummaryRibbon = ({ stats, netGainStats }) => {

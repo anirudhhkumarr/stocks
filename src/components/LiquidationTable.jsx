@@ -1,5 +1,4 @@
-import React from 'react';
-import { formatCurrency, formatPercent } from '../utils/calculations';
+import { formatCurrency } from '../utils/calculations';
 
 const LiquidationTable = ({ lots, targetAmount }) => {
   if (!lots || lots.length === 0 || targetAmount <= 0) return null;

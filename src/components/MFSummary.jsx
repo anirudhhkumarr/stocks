@@ -1,5 +1,4 @@
-import React from 'react';
-import { formatCurrency, formatPercent } from '../utils/calculations';
+
 
 const MFSummary = ({ stats, usdRate }) => {
     const fmtINR = (n) => '₹' + Math.round(n).toLocaleString('en-IN');

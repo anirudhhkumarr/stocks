@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
 const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) => {
@@ -248,6 +248,23 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
 
     const sliderPercent = (targetAmount / (totalValue || 1)) * 100;
 
+    // Calculate tax at current target from dataPoints
+    let estimatedTax = 0;
+    if (dataPoints && dataPoints.length > 0) {
+        // Find the closest data point <= targetAmount
+        for (let i = dataPoints.length - 1; i >= 0; i--) {
+            if (dataPoints[i].x <= targetAmount) {
+                estimatedTax = dataPoints[i].y;
+                break;
+            }
+        }
+        // If target is beyond all points, use the last one
+        if (targetAmount >= dataPoints[dataPoints.length - 1].x) {
+            estimatedTax = dataPoints[dataPoints.length - 1].y;
+        }
+    }
+    const netLiquidation = targetAmount - estimatedTax;
+
     return (
         <div className="card chart-card">
             <div className="card-header">
@@ -272,7 +289,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                 />
                 <div className="slider-labels">
                     <span>$0</span>
-                    <span>Target: ${Math.round(targetAmount).toLocaleString()}</span>
+                    <span>Net Liquidation: ${Math.round(netLiquidation).toLocaleString()}</span>
                     <span>${Math.round(totalValue / 1000).toLocaleString()}k</span>
                 </div>
             </div>

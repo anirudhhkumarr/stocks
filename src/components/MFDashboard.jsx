@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import MFToolbar from './MFToolbar';
 import MFSummary from './MFSummary';
 import MFPerformanceChart from './MFPerformanceChart';
@@ -11,11 +11,10 @@ const MFDashboard = () => {
         try {
             const saved = localStorage.getItem('portfolio_mfs');
             return saved ? JSON.parse(saved) : [];
-        } catch (e) { return []; }
+        } catch { return []; }
     });
     const [mfData, setMfData] = useState({});
     const [usdInr, setUsdInr] = useState({});
-    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
         localStorage.setItem('portfolio_mfs', JSON.stringify(activeMFs));
@@ -29,7 +28,6 @@ const MFDashboard = () => {
         if (activeMFs.length === 0) return;
 
         const fetchAll = async () => {
-            setLoading(true);
             const newMfData = { ...mfData };
             await Promise.all(activeMFs.map(async (mf) => {
                 if (!newMfData[mf.symbol]) {
@@ -44,10 +42,10 @@ const MFDashboard = () => {
             }
 
             setMfData(newMfData);
-            setLoading(false);
         };
 
         fetchAll();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeMFs]);
 
     // Derived Values

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Layout, BarChart, TrendingUp, PieChart, Home, Briefcase, IndianRupee } from 'lucide-react';
+import { useState } from 'react';
+import { Briefcase } from 'lucide-react';
 import StocksDashboard from './components/StocksDashboard';
 import MFDashboard from './components/MFDashboard';
 
