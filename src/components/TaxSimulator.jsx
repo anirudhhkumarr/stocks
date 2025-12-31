@@ -97,16 +97,6 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                     .attr('d', rateLine);
             }
 
-            if (visibleSeries.marginal) {
-                const marginalRateData = dataPoints.map(d => ({ x: d.x, y: d.marginalRate || 0 }));
-
-                svg.append('path')
-                    .datum(marginalRateData)
-                    .attr('fill', 'none')
-                    .attr('stroke', '#8b5cf6')
-                    .attr('stroke-width', 2)
-                    .attr('d', rateLine);
-            }
 
             // Axes (Unconditional)
             svg.append('g')
@@ -139,7 +129,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
             const tooltipPoints = {};
             const tooltipTexts = {};
 
-            const seriesColors = { tax: '#ef4444', basis: '#3b82f6', gain: '#10b981', rate: '#f59e0b', marginal: '#8b5cf6' };
+            const seriesColors = { tax: '#ef4444', basis: '#3b82f6', gain: '#10b981', rate: '#f59e0b' };
 
             Object.entries(seriesColors).forEach(([key, color]) => {
                 if (visibleSeries[key]) {
@@ -205,7 +195,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
 
                         if (val !== undefined && !isNaN(val)) {
                             let yPos;
-                            if (key === 'rate' || key === 'marginal') {
+                            if (key === 'rate') {
                                 yPos = yRate(val);
                             } else {
                                 // Use stacked position if available, else individual (shouldn't happen for stacked keys)
@@ -215,7 +205,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                             circle.attr('cy', yPos).style('visibility', 'visible');
 
                             let valStr;
-                            if (key === 'rate' || key === 'marginal') {
+                            if (key === 'rate') {
                                 valStr = val.toFixed(1) + '%';
                             } else {
                                 valStr = '$' + Math.round(val / 1000) + 'k';
