@@ -86,22 +86,25 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 cutoffDate = new Date();
                 cutoffDate.setDate(cutoffDate.getDate() - days);
             }
-            // 1. Data for X-axis scale (all lots in range, independent of symbol filter)
+            // 1. Calculate X-axis domain strictly based on range filter
             const allLotsData = lots.map(l => ({ ...l, openDate: new Date(l.openDate) }));
-            const xExtentData = cutoffDate
-                ? allLotsData.filter(d => d.openDate >= cutoffDate)
-                : allLotsData;
+            let xDomain;
+            const now = new Date();
 
-            if (xExtentData.length === 0 && allLotsData.length > 0) {
-                d3.select(svgRef.current).selectAll("*").remove();
-                return;
+            if (cutoffDate) {
+                xDomain = [cutoffDate, now];
+            } else {
+                xDomain = d3.extent(allLotsData, d => d.openDate);
+                if (!xDomain[0]) xDomain = [new Date(), new Date()];
             }
 
-            const xExtent = d3.extent(xExtentData, d => d.openDate);
             const x = d3.scaleTime()
-                .domain([xExtent[0], xExtent[1]])
+                .domain(xDomain)
                 .range([0, innerWidth])
                 .nice();
+
+            // Re-sync extent for subsequent logic (base price lookup etc)
+            const xExtent = x.domain();
 
             // 2. Data for Y-axis scale (honors symbol selection)
             const scaleData = cutoffDate
@@ -301,7 +304,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [baseChartData, symbols, prices, selectedSymbols, range, isLogScale]);
+    }, [baseChartData, symbols, prices, selectedSymbols, range, isLogScale, lots]);
 
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
