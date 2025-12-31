@@ -5,7 +5,6 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [selectedSymbols, setSelectedSymbols] = useState(null);
-    const [isLogScale, setIsLogScale] = useState(true);
     const [isGrouped, setIsGrouped] = useState(false);
 
     // Snapping values for the slider - used as reference points for interpolation
@@ -111,12 +110,51 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                 .range([0, innerWidth])
                 .nice();
 
-            const yRaw = scaleData.map(d => d.marketValue / d.costBasis);
-            const yExtent = d3.extent(yRaw);
-            const y = isLogScale
-                ? d3.scaleLog().domain([Math.max(0.01, yExtent[0] * 0.9), yExtent[1] * 1.1])
-                : d3.scaleLinear().domain([yExtent[0] - 0.05, yExtent[1] + 0.05]);
-            y.range([innerHeight, 0]);
+            // Calculate base prices for normalization (at the earliest date of the chart)
+            const basePrices = {};
+            if (prices) {
+                Object.entries(prices).forEach(([symbol, history]) => {
+                    const sortedDates = Object.keys(history).sort();
+                    // Find the price at or just before the start date
+                    const startDateStr = xExtent[0].toISOString().split('T')[0];
+                    let baseDate = sortedDates.find(d => d >= startDateStr) || sortedDates[0];
+                    basePrices[symbol] = history[baseDate];
+                });
+            }
+
+            // Calculate Y Extent based on normalized price history and bubbles
+            let yDomain = [-10, 10]; // Default
+            const historyPoints = [];
+            if (prices) {
+                symbols.forEach(symbol => {
+                    const history = prices[symbol];
+                    const base = basePrices[symbol];
+                    if (!history || !base) return;
+                    Object.keys(history).forEach(dateStr => {
+                        const d = new Date(dateStr);
+                        if (d >= xExtent[0] && d <= xExtent[1]) {
+                            historyPoints.push((history[dateStr] / base - 1) * 100);
+                        }
+                    });
+                });
+            }
+
+            baseChartData.forEach(d => {
+                const base = basePrices[d.symbol];
+                if (base && d.marketValue >= minValue) {
+                    historyPoints.push(((d.costBasis / d.qty) / base - 1) * 100);
+                }
+            });
+
+            if (historyPoints.length > 0) {
+                const extent = d3.extent(historyPoints);
+                yDomain = [extent[0] - 5, extent[1] + 5];
+            }
+
+            const y = d3.scaleLinear()
+                .domain(yDomain)
+                .range([innerHeight, 0])
+                .nice();
 
             const r = d3.scaleSqrt().domain([1, 500000]).range([2, 80]);
             const color = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
@@ -135,7 +173,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
 
             svg.append('line')
                 .attr('x1', 0).attr('x2', innerWidth)
-                .attr('y1', y(1)).attr('y2', y(1))
+                .attr('y1', y(0)).attr('y2', y(0))
                 .attr('stroke', 'rgba(255,255,255,0.2)').attr('stroke-width', 1).attr('stroke-dasharray', '4 4');
 
             // Axes
@@ -146,10 +184,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
             svg.append('g')
-                .call(d3.axisLeft(y).ticks(5).tickFormat(d => {
-                    const pct = (d - 1) * 100;
-                    return (pct >= 0 ? '+' : '') + pct.toFixed(0) + '%';
-                }))
+                .call(d3.axisLeft(y).ticks(5).tickFormat(d => (d >= 0 ? '+' : '') + d.toFixed(0) + '%'))
                 .call(g => g.select(".domain").remove())
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
@@ -160,29 +195,27 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
 
             svg.append('text').attr('transform', 'rotate(-90)').attr('x', -innerHeight / 2).attr('y', -55).attr('text-anchor', 'middle')
                 .style('fill', '#9ca3af').style('font-size', '12px').style('font-weight', '500')
-                .text(`Return %${isLogScale ? ' (Log)' : ''}`);
+                .text('Stock Return %');
 
             // Price History Lines (Background)
             if (prices) {
                 const activeSymbols = selectedSymbols ? Array.from(selectedSymbols) : symbols;
                 activeSymbols.forEach(symbol => {
                     const history = prices[symbol];
-                    if (!history) return;
+                    const base = basePrices[symbol];
+                    if (!history || !base) return;
 
                     const dates = Object.keys(history).sort();
-                    if (dates.length < 2) return;
-
-                    const latestPrice = history[dates[dates.length - 1]];
                     const lineData = dates
                         .map(dateStr => ({
                             date: new Date(dateStr),
-                            ratio: latestPrice / history[dateStr]
+                            perf: (history[dateStr] / base - 1) * 100
                         }))
                         .filter(d => d.date >= xExtent[0] && d.date <= xExtent[1]);
 
                     const lineGen = d3.line()
                         .x(d => x(d.date))
-                        .y(d => y(d.ratio))
+                        .y(d => y(d.perf))
                         .curve(d3.curveMonotoneX);
 
                     svg.append('path')
@@ -190,7 +223,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                         .attr('fill', 'none')
                         .attr('stroke', color(symbol))
                         .attr('stroke-width', 2)
-                        .attr('opacity', 0.15)
+                        .attr('opacity', 0.2)
                         .attr('d', lineGen);
                 });
             }
@@ -203,8 +236,9 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                 .attr('class', 'bubble-group')
                 .style('display', d => d.marketValue >= minValue ? null : 'none')
                 .attr('transform', d => {
+                    const base = basePrices[d.symbol];
                     const tx = x(d.openDate);
-                    const ty = y(d.marketValue / d.costBasis);
+                    const ty = base ? y(((d.costBasis / d.qty) / base - 1) * 100) : y(0);
                     return `translate(${tx},${ty})`;
                 })
                 .on('mouseover', function (event, d) {
@@ -215,9 +249,9 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                     const lines = [
                         `${d.symbol}${d.isGrouped ? ` (${d.tradeCount} trades)` : ` (${dateStr})`}`,
                         `Qty: ${d.qty.toFixed(2)}`,
-                        `Cost: $${d.costBasis.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                        `Cost/Sh: $${(d.costBasis / d.qty).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                         `Value: $${d.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `Return: ${((ratio - 1) * 100).toFixed(1)}%`
+                        `Total Ret: ${((ratio - 1) * 100).toFixed(1)}%`
                     ];
                     tooltipText.selectAll('tspan').remove();
                     lines.forEach((line, i) => {
@@ -226,11 +260,13 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                     });
                     const bbox = tooltipText.node().getBBox();
                     tooltipBg.attr('width', bbox.width + 24).attr('height', bbox.height + 20);
-                    let tx = x(d.openDate) + 15;
-                    let ty = y(ratio) - bbox.height / 2;
-                    if (tx + bbox.width + 40 > innerWidth) tx = x(d.openDate) - bbox.width - 35;
-                    ty = Math.max(0, Math.min(ty, innerHeight - bbox.height - 10));
-                    tooltip.attr('transform', `translate(${tx},${ty})`);
+                    const base = basePrices[d.symbol];
+                    const tx = x(d.openDate) + 15;
+                    const ty = base ? y(((d.costBasis / d.qty) / base - 1) * 100) - bbox.height / 2 : y(0);
+                    let finalTx = tx;
+                    if (tx + bbox.width + 40 > innerWidth) finalTx = x(d.openDate) - bbox.width - 35;
+                    const finalTy = Math.max(0, Math.min(ty, innerHeight - bbox.height - 10));
+                    tooltip.attr('transform', `translate(${finalTx},${finalTy})`);
                 })
                 .on('mouseout', function () {
                     d3.select(this).select('circle').attr('fill-opacity', 0.6).attr('stroke-width', 1.5);
@@ -254,7 +290,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [baseChartData, symbols, isLogScale, allLots, minValue, prices, selectedSymbols]);
+    }, [baseChartData, symbols, allLots, minValue, prices, selectedSymbols]);
 
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
@@ -265,7 +301,6 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                         <h3>{isGrouped ? 'Symbol Performance' : 'Individual Trade Performance'}</h3>
                         <div className="filter-group" style={{ display: 'flex', gap: '5px' }}>
-                            <button className={`filter-btn ${isLogScale ? 'active' : ''}`} onClick={() => setIsLogScale(!isLogScale)} style={{ padding: '2px 10px', fontSize: '10px' }}>Log Axes</button>
                             <button className={`filter-btn ${isGrouped ? 'active' : ''}`} onClick={() => setIsGrouped(!isGrouped)} style={{ padding: '2px 10px', fontSize: '10px' }}>{isGrouped ? 'Show Trades' : 'Group Symbols'}</button>
                         </div>
                     </div>
