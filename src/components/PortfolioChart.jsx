@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
-const PortfolioChart = ({ historyData, range, setRange }) => {
+const PortfolioChart = ({ historyData, range, setRange, isLogScale, isYearlyTicks }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [visibleSeries, setVisibleSeries] = useState({
@@ -10,8 +10,6 @@ const PortfolioChart = ({ historyData, range, setRange }) => {
         cost: true,
         tax: true
     });
-    const [isLogScale, setIsLogScale] = useState(false);
-    const [isYearlyTicks, setIsYearlyTicks] = useState(false);
 
     useEffect(() => {
         if (!historyData || historyData.length === 0) return;
@@ -282,16 +280,6 @@ const PortfolioChart = ({ historyData, range, setRange }) => {
         <div className="card chart-card">
             <div className="card-header">
                 <h3>Portfolio History</h3>
-                <div className="chart-controls">
-                    <button className={`filter-btn ${isLogScale ? 'active' : ''}`} onClick={() => setIsLogScale(!isLogScale)}>Log</button>
-                    <button className={`filter-btn ${isYearlyTicks ? 'active' : ''}`} onClick={() => setIsYearlyTicks(!isYearlyTicks)}>Yearly</button>
-                    <div className="divider" />
-                    {!isYearlyTicks && ['1m', '6m', '1y', '2y', '3y', '5y', 'max'].map(r => (
-                        <button key={r} className={`filter-btn ${range === r ? 'active' : ''}`} onClick={() => setRange(r)}>
-                            {r.toUpperCase()}
-                        </button>
-                    ))}
-                </div>
             </div>
             <div className="chart-container" ref={containerRef} style={{ height: '350px', position: 'relative' }}>
                 <svg ref={svgRef} />

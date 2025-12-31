@@ -23,6 +23,8 @@ const StocksDashboard = () => {
     const [historyData, setHistoryData] = useState([]);
     const [taxSimData, setTaxSimData] = useState([]);
     const [range, setRange] = useState('1y');
+    const [isLogScale, setIsLogScale] = useState(false);
+    const [isYearlyTicks, setIsYearlyTicks] = useState(false);
 
     // Persistence
     useEffect(() => {
@@ -244,8 +246,29 @@ const StocksDashboard = () => {
 
             <SummaryRibbon stats={stats} netGainStats={netGainStats} />
 
+            <div className="filter-ribbon card" style={{ marginTop: '1rem', padding: '10px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '20px', flexWrap: 'wrap' }}>
+                <div className="filter-group" style={{ display: 'flex', gap: '5px' }}>
+                    <button className={`filter-btn ${isLogScale ? 'active' : ''}`} onClick={() => setIsLogScale(!isLogScale)}>Log</button>
+                    <button className={`filter-btn ${isYearlyTicks ? 'active' : ''}`} onClick={() => setIsYearlyTicks(!isYearlyTicks)}>Yearly</button>
+                </div>
+                <div className="divider" style={{ width: '1px', height: '20px', background: 'var(--border-color)' }} />
+                <div className="filter-group" style={{ display: 'flex', gap: '5px' }}>
+                    {['1m', '6m', '1y', '2y', '3y', '5y', 'max'].map(r => (
+                        <button key={r} className={`filter-btn ${range === r ? 'active' : ''}`} onClick={() => setRange(r)}>
+                            {r.toUpperCase()}
+                        </button>
+                    ))}
+                </div>
+            </div>
+
             <div className="charts-grid" style={{ marginTop: '2rem' }}>
-                <PortfolioChart historyData={historyData} range={range} setRange={setRange} />
+                <PortfolioChart
+                    historyData={historyData}
+                    range={range}
+                    setRange={setRange}
+                    isLogScale={isLogScale}
+                    isYearlyTicks={isYearlyTicks}
+                />
                 <TaxSimulator
                     dataPoints={taxSimData}
                     targetAmount={targetAmount}
@@ -255,7 +278,14 @@ const StocksDashboard = () => {
             </div>
 
             <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
-                <TradeBubbleChart lots={planLots} allLots={activeLots} prices={prices} range={range} />
+                <TradeBubbleChart
+                    lots={planLots}
+                    allLots={activeLots}
+                    prices={prices}
+                    range={range}
+                    isLogScale={isLogScale}
+                    isYearlyTicks={isYearlyTicks}
+                />
             </div>
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />

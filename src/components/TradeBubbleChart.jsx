@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 
-const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
+const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTicks }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [selectedSymbols, setSelectedSymbols] = useState(null);
@@ -13,6 +13,25 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
         let base = lots;
         if (selectedSymbols) {
             base = base.filter(l => selectedSymbols.has(l.symbol));
+        }
+
+        if (isYearlyTicks) {
+            const grouped = d3.group(base, d => new Date(d.openDate).getFullYear());
+            return Array.from(grouped, ([year, items]) => {
+                const totalCost = d3.sum(items, d => d.costBasis);
+                const totalValue = d3.sum(items, d => d.marketValue);
+                return {
+                    symbol: `Year ${year}`,
+                    costBasis: totalCost,
+                    marketValue: totalValue,
+                    gainLoss: totalValue - totalCost,
+                    openDate: new Date(year, 0, 1),
+                    qty: d3.sum(items, d => d.qty),
+                    isGrouped: true,
+                    tradeCount: items.length,
+                    id: `year-${year}`
+                };
+            });
         }
 
         if (isGrouped) {
@@ -43,7 +62,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
             id: `lot-${i}`,
             openDate: new Date(l.openDate)
         }));
-    }, [lots, selectedSymbols, isGrouped]);
+    }, [lots, selectedSymbols, isGrouped, isYearlyTicks]);
 
     const symbols = useMemo(() => {
         const sourceLots = allLots || lots;
@@ -155,8 +174,13 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
                 yDomain = [extent[0] - 5, extent[1] + 5];
             }
 
-            const y = d3.scaleLinear()
-                .domain(yDomain)
+            const yScaleType = isLogScale ? d3.scaleLog : d3.scaleLinear;
+            const yOffset = isLogScale ? 100.1 : 0; // Avoid 0/neg in log for percentages
+
+            const y = yScaleType()
+                .domain(isLogScale
+                    ? [Math.max(1, yDomain[0] + 100), yDomain[1] + 100]
+                    : yDomain)
                 .range([innerHeight, 0])
                 .nice();
 
@@ -177,7 +201,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
 
             svg.append('line')
                 .attr('x1', 0).attr('x2', innerWidth)
-                .attr('y1', y(0)).attr('y2', y(0))
+                .attr('y1', y(isLogScale ? 100 : 0)).attr('y2', y(isLogScale ? 100 : 0))
                 .attr('stroke', 'rgba(255,255,255,0.2)').attr('stroke-width', 1).attr('stroke-dasharray', '4 4');
 
             // Axes
@@ -188,7 +212,10 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
             svg.append('g')
-                .call(d3.axisLeft(y).ticks(5).tickFormat(d => (d >= 0 ? '+' : '') + d.toFixed(0) + '%'))
+                .call(d3.axisLeft(y).ticks(5).tickFormat(d => {
+                    const actualD = isLogScale ? d - 100 : d;
+                    return (actualD >= 0 ? '+' : '') + actualD.toFixed(0) + '%';
+                }))
                 .call(g => g.select(".domain").remove())
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
@@ -199,7 +226,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
 
             svg.append('text').attr('transform', 'rotate(-90)').attr('x', -innerHeight / 2).attr('y', -55).attr('text-anchor', 'middle')
                 .style('fill', '#9ca3af').style('font-size', '12px').style('font-weight', '500')
-                .text('Stock Return %');
+                .text(`Stock Return %${isLogScale ? ' (Log Offset)' : ''}`);
 
             // Price History Lines (Background)
             if (prices) {
@@ -219,7 +246,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
 
                     const lineGen = d3.line()
                         .x(d => x(d.date))
-                        .y(d => y(d.perf))
+                        .y(d => y(isLogScale ? d.perf + 100 : d.perf))
                         .curve(d3.curveMonotoneX);
 
                     svg.append('path')
@@ -240,9 +267,10 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
                 .attr('class', 'bubble-group')
                 .style('display', d => cutoffDate && d.openDate < cutoffDate ? 'none' : null)
                 .attr('transform', d => {
-                    const base = basePrices[d.symbol];
+                    const base = basePrices[d.symbol] || basePrices[d.symbol.replace('Year ', '')];
                     const tx = x(d.openDate);
-                    const ty = base ? y(((d.costBasis / d.qty) / base - 1) * 100) : y(0);
+                    const perf = base ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
+                    const ty = y(isLogScale ? perf + 100 : perf);
                     return `translate(${tx},${ty})`;
                 })
                 .on('mouseover', function (event, d) {
@@ -264,9 +292,10 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
                     });
                     const bbox = tooltipText.node().getBBox();
                     tooltipBg.attr('width', bbox.width + 24).attr('height', bbox.height + 20);
-                    const base = basePrices[d.symbol];
+                    const base = basePrices[d.symbol] || basePrices[d.symbol.replace('Year ', '')];
                     const tx = x(d.openDate) + 15;
-                    const ty = base ? y(((d.costBasis / d.qty) / base - 1) * 100) - bbox.height / 2 : y(0);
+                    const perf = base ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
+                    const ty = y(isLogScale ? perf + 100 : perf) - bbox.height / 2;
                     let finalTx = tx;
                     if (tx + bbox.width + 40 > innerWidth) finalTx = x(d.openDate) - bbox.width - 35;
                     const finalTy = Math.max(0, Math.min(ty, innerHeight - bbox.height - 10));
@@ -294,7 +323,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [baseChartData, symbols, allLots, prices, selectedSymbols, range]);
+    }, [baseChartData, symbols, allLots, prices, selectedSymbols, range, isLogScale, isYearlyTicks]);
 
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
