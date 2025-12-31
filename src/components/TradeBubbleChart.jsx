@@ -86,21 +86,27 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 cutoffDate = new Date();
                 cutoffDate.setDate(cutoffDate.getDate() - days);
             }
+            // 1. Data for X-axis scale (all lots in range, independent of symbol filter)
+            const allLotsData = lots.map(l => ({ ...l, openDate: new Date(l.openDate) }));
+            const xExtentData = cutoffDate
+                ? allLotsData.filter(d => d.openDate >= cutoffDate)
+                : allLotsData;
 
-            const scaleData = cutoffDate
-                ? baseChartData.filter(d => d.openDate >= cutoffDate)
-                : baseChartData;
-
-            if (scaleData.length === 0 && baseChartData.length > 0) {
+            if (xExtentData.length === 0 && allLotsData.length > 0) {
                 d3.select(svgRef.current).selectAll("*").remove();
                 return;
             }
 
-            const xExtent = d3.extent(scaleData, d => d.openDate);
+            const xExtent = d3.extent(xExtentData, d => d.openDate);
             const x = d3.scaleTime()
                 .domain([xExtent[0], xExtent[1]])
                 .range([0, innerWidth])
                 .nice();
+
+            // 2. Data for Y-axis scale (honors symbol selection)
+            const scaleData = cutoffDate
+                ? baseChartData.filter(d => d.openDate >= cutoffDate)
+                : baseChartData;
 
             const basePrices = {};
             if (prices) {
@@ -112,7 +118,8 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 });
             }
 
-            let yDomain = [-10, 10];
+            // Calculate Y Extent based on normalized price history and bubbles of SELECTED symbols in the VISIBLE window
+            let yDomain = [-10, 10]; // Default
             const historyPoints = [];
             const activeSymbols = selectedSymbols ? Array.from(selectedSymbols) : symbols;
 
@@ -123,23 +130,33 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                     if (!history || !base) return;
                     Object.keys(history).forEach(dateStr => {
                         const d = new Date(dateStr);
-                        if (d >= xExtent[0] && d <= xExtent[1]) {
+                        if (d >= x.domain()[0] && d <= x.domain()[1]) {
                             historyPoints.push((history[dateStr] / base - 1) * 100);
                         }
                     });
                 });
             }
 
-            baseChartData.forEach(d => {
-                const actualSymbol = d.isGrouped && d.symbol.startsWith('Year ') ? null : d.symbol;
+            scaleData.forEach(d => {
+                // Determine the ROI for this bubble (individual or yearly group)
+                // For individual trades, we use its own cost basis vs its stock's base price at chart start
+                // For yearly groups, we use the aggregate cost basis vs the base price (if it's a single stock)
+                // If it's mixed stocks, ROI is harder, so we use its internal current/cost ratio (normalized to chart start roughly)
+                const actualSymbol = (d.isGrouped && d.symbol.startsWith('Year ')) ? null : d.symbol;
                 const base = actualSymbol ? basePrices[actualSymbol] : null;
-                if (base && (!selectedSymbols || selectedSymbols.has(actualSymbol))) {
+
+                if (base) {
                     historyPoints.push(((d.costBasis / d.qty) / base - 1) * 100);
+                } else {
+                    // Fallback: use marketValue/costBasis as a proxy for its "position" on the Y axis 
+                    // this isn't perfect for mixed yearly groups but keeps them in frame
+                    historyPoints.push((d.marketValue / d.costBasis - 1) * 100);
                 }
             });
 
             if (historyPoints.length > 0) {
                 const extent = d3.extent(historyPoints);
+                // Add a small 5% padding to the range (subtractive/additive for percentages)
                 yDomain = [extent[0] - 5, extent[1] + 5];
             }
 
