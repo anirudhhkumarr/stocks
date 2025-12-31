@@ -126,11 +126,15 @@ const StocksDashboard = () => {
         const rates = getTaxRates(w2Income);
 
         const augmentedLots = activeLots.map(lot => {
-            const tax = calculateLotTax(lot.gainLoss, lot.holdingPeriod === 'Long Term', rates);
+            const isLongTerm = lot.holdingPeriod === 'Long Term';
+            const tax = calculateLotTax(lot.gainLoss, isLongTerm, rates);
+            const lotMarginalRate = (rates.caRate + rates.niitRate + rates.mhRate + (isLongTerm ? rates.ltcgRate : rates.fedRate)) * 100;
+
             return {
                 ...lot,
                 estTax: tax,
-                efficiency: tax / lot.marketValue
+                efficiency: tax / lot.marketValue,
+                lotMarginalRate
             };
         }).sort((a, b) => a.efficiency - b.efficiency);
 
@@ -141,15 +145,12 @@ const StocksDashboard = () => {
             cumB += lot.costBasis;
             cumT += lot.estTax;
 
-            const cumGain = cumP - cumB;
-            const marginalRate = cumGain > 0 ? (cumT / cumGain) * 100 : 0;
-
             points.push({
                 x: cumP,
                 y: cumT,
                 basis: cumB,
                 lot,
-                marginalRate
+                marginalRate: lot.lotMarginalRate
             });
         });
         setTaxSimData(points);

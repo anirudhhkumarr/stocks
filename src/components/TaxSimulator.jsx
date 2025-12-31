@@ -186,7 +186,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                         basis: d.basis,
                         gain: Math.max(0, d.x - d.basis - d.y),
                         tax: d.y,
-                        rate: d.x > 0 ? (d.y / d.x) * 100 : 0,
+                        rate: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0,
                         marginal: d.marginalRate || 0
                     };
 

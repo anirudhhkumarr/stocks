@@ -67,13 +67,14 @@ export function getTaxRates(w2Income) {
     }
 
     const niitRate = w2Income > NIIT_THRESHOLD ? NIIT_RATE : 0;
+    const mhRate = w2Income > CA_MENTAL_HEALTH_THRESHOLD ? CA_MENTAL_HEALTH_RATE : 0;
 
-    return { fedRate, ltcgRate, caRate, niitRate };
+    return { fedRate, ltcgRate, caRate, niitRate, mhRate };
 }
 
 export function calculateLotTax(gain, isLongTerm, rates) {
-    const { fedRate, ltcgRate, caRate, niitRate } = rates;
-    let totalRate = caRate + niitRate;
+    const { fedRate, ltcgRate, caRate, niitRate, mhRate } = rates;
+    let totalRate = caRate + niitRate + mhRate;
 
     if (isLongTerm) {
         totalRate += ltcgRate;
