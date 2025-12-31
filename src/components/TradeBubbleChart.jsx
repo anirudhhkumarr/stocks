@@ -5,10 +5,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [selectedSymbols, setSelectedSymbols] = useState(null);
-    const [isGrouped, setIsGrouped] = useState(false);
 
-
-    // baseChartData contains all possible bubbles for the current grouping/symbol selection
     const baseChartData = useMemo(() => {
         let base = lots;
         if (selectedSymbols) {
@@ -34,35 +31,12 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             });
         }
 
-        if (isGrouped) {
-            const grouped = d3.group(base, d => d.symbol);
-            return Array.from(grouped, ([symbol, items]) => {
-                const totalCost = d3.sum(items, d => d.costBasis);
-                const totalValue = d3.sum(items, d => d.marketValue);
-                // For grouped view, use the earliest trade date as the reference
-                const dates = items.map(d => new Date(d.openDate)).filter(d => !isNaN(d));
-                const minDate = dates.length > 0 ? d3.min(dates) : new Date();
-
-                return {
-                    symbol,
-                    costBasis: totalCost,
-                    marketValue: totalValue,
-                    gainLoss: totalValue - totalCost,
-                    openDate: minDate,
-                    qty: d3.sum(items, d => d.qty),
-                    isGrouped: true,
-                    tradeCount: items.length,
-                    id: `group-${symbol}`
-                };
-            });
-        }
-
         return base.map((l, i) => ({
             ...l,
             id: `lot-${i}`,
             openDate: new Date(l.openDate)
         }));
-    }, [lots, selectedSymbols, isGrouped, isYearlyTicks]);
+    }, [lots, selectedSymbols, isYearlyTicks]);
 
     const symbols = useMemo(() => {
         const sourceLots = allLots || lots;
@@ -83,7 +57,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
         });
     };
 
-    // Main D3 logic: Renders the structure and bubbles
     useEffect(() => {
         if (!baseChartData || baseChartData.length === 0) {
             d3.select(svgRef.current).selectAll("*").remove();
@@ -106,7 +79,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
-            // 0. Filter data by range if not 'max'
             let cutoffDate = null;
             if (range && range !== 'max') {
                 const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
@@ -115,38 +87,32 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 cutoffDate.setDate(cutoffDate.getDate() - days);
             }
 
-            // 1. Data for scale calculation
             const scaleData = cutoffDate
                 ? baseChartData.filter(d => d.openDate >= cutoffDate)
                 : baseChartData;
 
             if (scaleData.length === 0 && baseChartData.length > 0) {
-                // If no data in range, fallback to showing nothing or a message
                 d3.select(svgRef.current).selectAll("*").remove();
                 return;
             }
 
-            // 2. Scales (calculated based on visible data)
             const xExtent = d3.extent(scaleData, d => d.openDate);
             const x = d3.scaleTime()
                 .domain([xExtent[0], xExtent[1]])
                 .range([0, innerWidth])
                 .nice();
 
-            // Calculate base prices for normalization (at the earliest date of the chart)
             const basePrices = {};
             if (prices) {
                 Object.entries(prices).forEach(([symbol, history]) => {
                     const sortedDates = Object.keys(history).sort();
-                    // Find the price at or just before the start date
                     const startDateStr = xExtent[0].toISOString().split('T')[0];
                     let baseDate = sortedDates.find(d => d >= startDateStr) || sortedDates[0];
                     basePrices[symbol] = history[baseDate];
                 });
             }
 
-            // Calculate Y Extent based on normalized price history and bubbles of SELECTED symbols
-            let yDomain = [-10, 10]; // Default
+            let yDomain = [-10, 10];
             const historyPoints = [];
             const activeSymbols = selectedSymbols ? Array.from(selectedSymbols) : symbols;
 
@@ -165,12 +131,8 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             }
 
             baseChartData.forEach(d => {
-                // Determine the actual symbol for price lookup, handling 'Year X' groups
                 const actualSymbol = d.isGrouped && d.symbol.startsWith('Year ') ? null : d.symbol;
                 const base = actualSymbol ? basePrices[actualSymbol] : null;
-
-                // Only include in Y-domain calculation if it's a selected symbol (or no selection is active)
-                // and if it's not a 'Year X' group (as these don't have individual stock prices)
                 if (base && (!selectedSymbols || selectedSymbols.has(actualSymbol))) {
                     historyPoints.push(((d.costBasis / d.qty) / base - 1) * 100);
                 }
@@ -182,7 +144,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             }
 
             const yScaleType = isLogScale ? d3.scaleLog : d3.scaleLinear;
-
             const y = yScaleType()
                 .domain(isLogScale
                     ? [Math.max(1, yDomain[0] + 100), yDomain[1] + 100]
@@ -193,7 +154,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             const r = d3.scaleSqrt().domain([1, 500000]).range([2, 80]);
             const color = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
-            // Grid Lines
             svg.append('g').attr('class', 'grid')
                 .attr('transform', `translate(0,${innerHeight})`)
                 .call(d3.axisBottom(x).ticks(5).tickSize(-innerHeight).tickFormat(''))
@@ -210,7 +170,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .attr('y1', y(isLogScale ? 100 : 0)).attr('y2', y(isLogScale ? 100 : 0))
                 .attr('stroke', 'rgba(255,255,255,0.2)').attr('stroke-width', 1).attr('stroke-dasharray', '4 4');
 
-            // Axes
             svg.append('g')
                 .attr('transform', `translate(0,${innerHeight})`)
                 .call(d3.axisBottom(x).ticks(5).tickFormat(d3.timeFormat("%b %y")))
@@ -225,7 +184,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .call(g => g.select(".domain").remove())
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
-            // Axis labels
             svg.append('text').attr('x', innerWidth / 2).attr('y', innerHeight + 45).attr('text-anchor', 'middle')
                 .style('fill', '#9ca3af').style('font-size', '12px').style('font-weight', '500')
                 .text('Trade Date');
@@ -234,9 +192,7 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .style('fill', '#9ca3af').style('font-size', '12px').style('font-weight', '500')
                 .text(`Stock Return %${isLogScale ? ' (Log Offset)' : ''}`);
 
-            // Price History Lines (Background)
             if (prices) {
-                const activeSymbols = selectedSymbols ? Array.from(selectedSymbols) : symbols;
                 activeSymbols.forEach(symbol => {
                     const history = prices[symbol];
                     const base = basePrices[symbol];
@@ -265,7 +221,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 });
             }
 
-            // Create bubbles for ALL base data but hide ones below minValue
             const bubbles = svg.selectAll('.bubble-group')
                 .data(baseChartData, d => d.id)
                 .enter()
@@ -323,29 +278,20 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             const tooltip = svg.append('g').attr('class', 'bubble-tooltip').style('display', 'none').style('pointer-events', 'none');
             const tooltipBg = tooltip.append('rect').attr('fill', 'rgba(15, 17, 21, 0.95)').attr('stroke', 'var(--border-color)').attr('stroke-width', 1).attr('rx', 8).attr('ry', 8);
             const tooltipText = tooltip.append('text').attr('fill', '#e5e7eb').style('font-size', '11px').attr('x', 10).attr('y', 20);
-
         };
 
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [baseChartData, symbols, allLots, prices, selectedSymbols, range, isLogScale, isYearlyTicks]);
+    }, [baseChartData, symbols, prices, selectedSymbols, range, isLogScale]);
 
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
     return (
         <div className="card chart-card trade-bubble-card" style={{ gridColumn: '1 / -1' }}>
             <div className="card-header">
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '15px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                        <h3>{isGrouped ? 'Symbol Performance' : 'Individual Trade Performance'}</h3>
-                        <div className="filter-group" style={{ display: 'flex', gap: '5px' }}>
-                            <button className={`filter-btn ${isGrouped ? 'active' : ''}`} onClick={() => setIsGrouped(!isGrouped)} style={{ padding: '2px 10px', fontSize: '10px' }}>{isGrouped ? 'Show Trades' : 'Group Symbols'}</button>
-                        </div>
-                    </div>
-                </div>
+                <h3>{isYearlyTicks ? 'Yearly Performance' : 'Individual Trade Performance'}</h3>
             </div>
-
             <div className="symbol-filters" style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px', padding: '0 10px' }}>
                 {symbols.map(s => {
                     const isActive = !selectedSymbols || selectedSymbols.has(s);
@@ -355,11 +301,9 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                     );
                 })}
             </div>
-
             <div className="chart-container" ref={containerRef} style={{ height: '480px', position: 'relative' }}>
                 <svg ref={svgRef} />
             </div>
-
         </div>
     );
 };
