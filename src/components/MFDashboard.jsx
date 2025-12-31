@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import MFToolbar from './MFToolbar';
 import MFSummary from './MFSummary';
 import MFPerformanceChart from './MFPerformanceChart';
+import MFPortfolioGrowthChart from './MFPortfolioGrowthChart';
 import MFAllocationChart from './MFAllocationChart';
 import { fetchStockData } from '../utils/api';
 import { FUND_METADATA } from '../utils/mfUtils';
@@ -15,6 +16,7 @@ const MFDashboard = () => {
     });
     const [mfData, setMfData] = useState({});
     const [usdInr, setUsdInr] = useState({});
+    const [range, setRange] = useState('1y');
 
     useEffect(() => {
         localStorage.setItem('portfolio_mfs', JSON.stringify(activeMFs));
@@ -57,23 +59,81 @@ const MFDashboard = () => {
 
     const latestRate = getLatestValue('INR=X', usdInr) || 84;
 
-    let totalValueINR = 0;
-    activeMFs.forEach(mf => {
-        const price = getLatestValue(mf.symbol, mfData[mf.symbol]);
-        totalValueINR += price * mf.units;
-    });
+    // Filter dates by range
+    const allDates = useMemo(() => Object.keys(usdInr).length > 0 ? Object.keys(usdInr).sort() : [], [usdInr]);
+    const filteredDates = useMemo(() => {
+        if (allDates.length === 0) return [];
+        if (range === 'max') return allDates;
 
-    const totalValueUSD = totalValueINR / latestRate;
+        const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
+        const days = daysMap[range] || 365;
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - days);
+        const cutoffStr = cutoff.toISOString().split('T')[0];
 
-    // Stats for summary (Mocking start value as 90% of current for now)
-    const stats = {
-        totalValueINR,
-        gainINR: totalValueINR * 0.1,
-        gainPctINR: 10,
-        totalValueUSD,
-        gainUSD: totalValueUSD * 0.1,
-        gainPctUSD: 10
-    };
+        return allDates.filter(d => d >= cutoffStr);
+    }, [allDates, range]);
+
+    // Prepare Performance Data
+    const performanceINR = useMemo(() => {
+        return allDates.map(date => {
+            let v = 0;
+            activeMFs.forEach(mf => {
+                const hist = mfData[mf.symbol];
+                if (hist && hist[date]) v += hist[date] * mf.units;
+            });
+            return { x: date, y: v };
+        }).filter(d => d.y > 0);
+    }, [allDates, activeMFs, mfData]);
+
+    const performanceUSD = useMemo(() => {
+        return allDates.map(date => {
+            let v = 0;
+            activeMFs.forEach(mf => {
+                const hist = mfData[mf.symbol];
+                if (hist && hist[date]) v += hist[date] * mf.units;
+            });
+            const rate = usdInr[date] || latestRate;
+            return { x: date, y: v / rate };
+        }).filter(d => d.y > 0);
+    }, [allDates, activeMFs, mfData, usdInr, latestRate]);
+
+    // Current Stats Calculation (Reactive to Range)
+    const stats = useMemo(() => {
+        if (filteredDates.length === 0) return { totalValueINR: 0, gainINR: 0, gainPctINR: 0, totalValueUSD: 0, gainUSD: 0, gainPctUSD: 0 };
+
+        const startDate = filteredDates[0];
+        const endDate = filteredDates[filteredDates.length - 1];
+
+        const calculateVal = (date) => {
+            let v = 0;
+            activeMFs.forEach(mf => {
+                const hist = mfData[mf.symbol];
+                if (hist && hist[date]) v += hist[date] * mf.units;
+            });
+            return v;
+        };
+
+        const currentINR = calculateVal(endDate);
+        const startINR = calculateVal(startDate);
+        const gainINR = currentINR - startINR;
+
+        const rateEnd = usdInr[endDate] || latestRate;
+        const rateStart = usdInr[startDate] || latestRate;
+        const currentUSD = currentINR / rateEnd;
+        const startUSD = startINR / rateStart;
+        const gainUSD = currentUSD - startUSD;
+
+        return {
+            totalValueINR: currentINR,
+            gainINR,
+            gainPctINR: startINR > 0 ? (gainINR / startINR) * 100 : 0,
+            totalValueUSD: currentUSD,
+            gainUSD,
+            gainPctUSD: startUSD > 0 ? (gainUSD / startUSD) * 100 : 0,
+            range
+        };
+    }, [filteredDates, activeMFs, mfData, usdInr, latestRate, range]);
 
     // Prepare allocation data
     const allocation = activeMFs.map(mf => {
@@ -81,27 +141,6 @@ const MFDashboard = () => {
         const name = FUND_METADATA.find(f => f.symbol === mf.symbol)?.name || mf.symbol;
         return { name, value: price * mf.units };
     }).filter(d => d.value > 0).sort((a, b) => b.value - a.value);
-
-    // Prepare performance data INR
-    const dates = Object.keys(usdInr).length > 0 ? Object.keys(usdInr).sort() : [];
-    const performanceINR = dates.map(date => {
-        let v = 0;
-        activeMFs.forEach(mf => {
-            const hist = mfData[mf.symbol];
-            if (hist && hist[date]) v += hist[date] * mf.units;
-        });
-        return { x: date, y: v };
-    }).filter(d => d.y > 0);
-
-    const performanceUSD = dates.map(date => {
-        let v = 0;
-        activeMFs.forEach(mf => {
-            const hist = mfData[mf.symbol];
-            if (hist && hist[date]) v += hist[date] * mf.units;
-        });
-        const rate = usdInr[date] || latestRate;
-        return { x: date, y: v / rate };
-    }).filter(d => d.y > 0);
 
     if (activeMFs.length === 0) {
         return (
@@ -117,9 +156,12 @@ const MFDashboard = () => {
         <div className="mf-dashboard">
             <MFToolbar onAddMF={handleAddMF} />
             <MFSummary stats={stats} usdRate={latestRate} />
+
             <div className="charts-grid-full" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '20px' }}>
-                <MFPerformanceChart inrData={performanceINR} usdData={performanceUSD} />
+                <MFPortfolioGrowthChart inrData={performanceINR} usdData={performanceUSD} range={range} setRange={setRange} />
+                <MFPerformanceChart inrData={performanceINR} usdData={performanceUSD} range={range} />
             </div>
+
             <div className="charts-grid" style={{ marginTop: '20px' }}>
                 <MFAllocationChart data={allocation} />
             </div>
