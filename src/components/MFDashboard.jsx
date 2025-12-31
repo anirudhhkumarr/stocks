@@ -157,7 +157,7 @@ const MFDashboard = () => {
             <MFToolbar onAddMF={handleAddMF} />
             <MFSummary stats={stats} usdRate={latestRate} />
 
-            <div className="charts-grid-full" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '20px' }}>
+            <div className="charts-grid-full" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(600px, 1fr))', gap: '24px', marginTop: '20px' }}>
                 <MFPortfolioGrowthChart inrData={performanceINR} usdData={performanceUSD} range={range} setRange={setRange} />
                 <MFPerformanceChart inrData={performanceINR} usdData={performanceUSD} range={range} />
             </div>
