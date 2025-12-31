@@ -86,21 +86,35 @@ export function calculateLotTax(gain, isLongTerm, rates) {
 }
 
 export function calculateTotalTax(w2Income, stcg, ltcg) {
-    // 1. Federal Ordinary Income Tax (W2 + STCG)
-    // Capital Loss Rule: Net capital losses can offset up to $3,000 of W2 income
-    let netCapitalGain = stcg + ltcg;
+    // 1. Federal Netting Logic
     let taxableOrdinary = w2Income;
-    let effectiveLtcg = ltcg;
+    let effectiveLtcg = 0;
 
-    if (netCapitalGain < 0) {
-        // Offset W2 up to $3000
-        const lossOffset = Math.max(netCapitalGain, -3000);
-        taxableOrdinary += lossOffset;
-        effectiveLtcg = 0;
-    } else {
-        // Net gain is positive. STCG is taxed as ordinary. 
-        // LTCG is taxed at special rates but its position in the stack depends on ordinary income.
+    // Netting rules: 
+    // - If ST and LT are same sign, keep characters.
+    // - If opposite signs, net them. The character follows the larger one.
+    if ((stcg >= 0 && ltcg >= 0) || (stcg <= 0 && ltcg <= 0)) {
         taxableOrdinary += Math.max(0, stcg);
+        effectiveLtcg = Math.max(0, ltcg);
+    } else {
+        const net = stcg + ltcg;
+        if (net > 0) {
+            // If net is positive, character is ST if stcg was larger (in abs), else LT.
+            // Simplified: if stcg > 0, it means stcg was large enough to cover the lt loss.
+            if (stcg > 0) {
+                taxableOrdinary += net;
+                effectiveLtcg = 0;
+            } else {
+                taxableOrdinary += 0;
+                effectiveLtcg = net;
+            }
+        }
+    }
+
+    // Federal Capital Loss Rule: Net loss offsets up to $3k of W2
+    const totalNetGain = stcg + ltcg;
+    if (totalNetGain < 0) {
+        taxableOrdinary += Math.max(totalNetGain, -3000);
     }
 
     let fedOrdTax = calculateTaxFromBrackets(taxableOrdinary, FED_BRACKETS);
