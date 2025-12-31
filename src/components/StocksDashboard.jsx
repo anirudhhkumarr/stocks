@@ -254,7 +254,7 @@ const StocksDashboard = () => {
             </div>
 
             <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
-                <TradeBubbleChart lots={planLots} allLots={activeLots} />
+                <TradeBubbleChart lots={planLots} allLots={activeLots} prices={prices} />
             </div>
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />
