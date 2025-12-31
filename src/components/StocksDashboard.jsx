@@ -274,7 +274,6 @@ const StocksDashboard = () => {
                     targetAmount={targetAmount}
                     onTargetChange={setTargetAmount}
                     totalValue={totalValue}
-                    isLogScale={isLogScale}
                 />
             </div>
 

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
-const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue, isLogScale }) => {
+const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [visibleSeries, setVisibleSeries] = useState({
@@ -45,9 +45,9 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue, is
                 .domain([0, d3.max(dataPoints, d => d.x)])
                 .range([0, innerWidth]);
 
-            const y = isLogScale
-                ? d3.scaleLog().domain([1, Math.max(10, d3.max(dataPoints, d => d.x) * 1.1)]).range([innerHeight, 0])
-                : d3.scaleLinear().domain([0, d3.max(dataPoints, d => d.x) * 1.1]).range([innerHeight, 0]);
+            const y = d3.scaleLinear()
+                .domain([0, d3.max(dataPoints, d => d.x) * 1.1])
+                .range([innerHeight, 0]);
 
             const yRate = d3.scaleLinear()
                 .domain([0, 50])
@@ -244,7 +244,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue, is
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [dataPoints, visibleSeries, isLogScale]);
+    }, [dataPoints, visibleSeries]);
 
     const sliderPercent = (targetAmount / (totalValue || 1)) * 100;
 
