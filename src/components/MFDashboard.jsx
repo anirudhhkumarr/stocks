@@ -117,9 +117,10 @@ const MFDashboard = () => {
         <div className="mf-dashboard">
             <MFToolbar onAddMF={handleAddMF} />
             <MFSummary stats={stats} usdRate={latestRate} />
-            <div className="charts-grid">
-                <MFPerformanceChart data={performanceINR} currency="INR" />
-                <MFPerformanceChart data={performanceUSD} currency="USD" />
+            <div className="charts-grid-full" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginTop: '20px' }}>
+                <MFPerformanceChart inrData={performanceINR} usdData={performanceUSD} />
+            </div>
+            <div className="charts-grid" style={{ marginTop: '20px' }}>
                 <MFAllocationChart data={allocation} />
             </div>
         </div>
