@@ -148,8 +148,9 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .domain(isLogScale
                     ? [Math.max(1, yDomain[0] + 100), yDomain[1] + 100]
                     : yDomain)
-                .range([innerHeight, 0])
-                .nice();
+                .range([innerHeight, 0]);
+
+            if (!isLogScale) y.nice();
 
             const r = d3.scaleSqrt().domain([1, 500000]).range([2, 80]);
             const color = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
