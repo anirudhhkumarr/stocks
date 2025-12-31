@@ -205,14 +205,16 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                             circle.attr('cy', yPos).style('visibility', 'visible');
 
                             let valStr;
+                            const prefixes = { basis: 'Basis: ', gain: 'Gain: ', tax: 'Tax: ', rate: 'Eff. Rate: ' };
+                            const prefix = prefixes[key] || '';
+
                             if (key === 'rate') {
-                                valStr = val.toFixed(1) + '%';
+                                valStr = prefix + val.toFixed(1) + '%';
                             } else {
-                                valStr = '$' + Math.round(val / 1000) + 'k';
+                                valStr = prefix + '$' + Math.round(val / 1000) + 'k';
                             }
 
                             text.attr('y', yPos - 8)
-                                .attr('x', 8)
                                 .text(valStr)
                                 .style('visibility', 'visible');
 
