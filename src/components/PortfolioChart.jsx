@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
-const PortfolioChart = ({ historyData }) => {
+const PortfolioChart = ({ historyData, range, setRange }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [visibleSeries, setVisibleSeries] = useState({
@@ -11,7 +11,6 @@ const PortfolioChart = ({ historyData }) => {
         tax: true
     });
     const [isLogScale, setIsLogScale] = useState(false);
-    const [range, setRange] = useState('1y');
     const [isYearlyTicks, setIsYearlyTicks] = useState(false);
 
     useEffect(() => {

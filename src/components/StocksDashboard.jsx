@@ -22,6 +22,7 @@ const StocksDashboard = () => {
     const [targetAmount, setTargetAmount] = useState(() => parseFloat(localStorage.getItem('targetLiquidation')) || 0);
     const [historyData, setHistoryData] = useState([]);
     const [taxSimData, setTaxSimData] = useState([]);
+    const [range, setRange] = useState('1y');
 
     // Persistence
     useEffect(() => {
@@ -244,7 +245,7 @@ const StocksDashboard = () => {
             <SummaryRibbon stats={stats} netGainStats={netGainStats} />
 
             <div className="charts-grid" style={{ marginTop: '2rem' }}>
-                <PortfolioChart historyData={historyData} />
+                <PortfolioChart historyData={historyData} range={range} setRange={setRange} />
                 <TaxSimulator
                     dataPoints={taxSimData}
                     targetAmount={targetAmount}
@@ -254,7 +255,7 @@ const StocksDashboard = () => {
             </div>
 
             <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
-                <TradeBubbleChart lots={planLots} allLots={activeLots} prices={prices} />
+                <TradeBubbleChart lots={planLots} allLots={activeLots} prices={prices} range={range} />
             </div>
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />

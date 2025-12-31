@@ -1,7 +1,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import * as d3 from 'd3';
 
-const TradeBubbleChart = ({ lots, allLots, prices }) => {
+const TradeBubbleChart = ({ lots, allLots, prices, range }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [selectedSymbols, setSelectedSymbols] = useState(null);
@@ -87,8 +87,25 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                 .append('g')
                 .attr('transform', `translate(${margin.left},${margin.top})`);
 
+            // 0. Filter data by range if not 'max'
+            let cutoffDate = null;
+            if (range && range !== 'max') {
+                const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
+                const days = daysMap[range] || 0;
+                cutoffDate = new Date();
+                cutoffDate.setDate(cutoffDate.getDate() - days);
+            }
+
             // 1. Data for scale calculation
-            const scaleData = baseChartData;
+            const scaleData = cutoffDate
+                ? baseChartData.filter(d => d.openDate >= cutoffDate)
+                : baseChartData;
+
+            if (scaleData.length === 0 && baseChartData.length > 0) {
+                // If no data in range, fallback to showing nothing or a message
+                d3.select(svgRef.current).selectAll("*").remove();
+                return;
+            }
 
             // 2. Scales (calculated based on visible data)
             const xExtent = d3.extent(scaleData, d => d.openDate);
@@ -221,6 +238,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
                 .enter()
                 .append('g')
                 .attr('class', 'bubble-group')
+                .style('display', d => cutoffDate && d.openDate < cutoffDate ? 'none' : null)
                 .attr('transform', d => {
                     const base = basePrices[d.symbol];
                     const tx = x(d.openDate);
@@ -276,7 +294,7 @@ const TradeBubbleChart = ({ lots, allLots, prices }) => {
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [baseChartData, symbols, allLots, prices, selectedSymbols]);
+    }, [baseChartData, symbols, allLots, prices, selectedSymbols, range]);
 
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
