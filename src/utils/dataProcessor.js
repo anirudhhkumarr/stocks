@@ -68,7 +68,7 @@ export function processPortfolioData(filesData) {
             const qty = parseFloat(cleanNum(cols[colMap.qty]));
             const costBasis = parseFloat(cleanNum(cols[colMap.costBasis]));
 
-            if (isNaN(qty)) continue;
+            if (isNaN(qty) || isNaN(costBasis)) continue;
 
             const lot = {
                 symbol,

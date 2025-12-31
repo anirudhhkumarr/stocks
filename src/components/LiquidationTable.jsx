@@ -11,7 +11,6 @@ const LiquidationTable = ({ lots, targetAmount }) => {
     <div className="card table-card" style={{ marginTop: '2rem' }}>
       <div className="card-header">
         <h3>Optimal Liquidation Plan</h3>
-        <span className="subtitle">Prioritized by Tax Efficiency</span>
       </div>
       <div className="table-wrapper">
         <table className="data-table">

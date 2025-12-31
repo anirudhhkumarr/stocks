@@ -64,7 +64,6 @@ const StocksDashboard = () => {
     }, [files]);
 
     // Fetch prices when portfolio symbols change
-    // Use stringified symbols as dependency to avoid infinite loop from object reference changes
     const symbolsKey = Object.keys(portfolio.summary.stocks).sort().join(',');
     useEffect(() => {
         const symbols = symbolsKey.split(',').filter(s => s);
@@ -96,14 +95,13 @@ const StocksDashboard = () => {
         return history[dates[dates.length - 1]] || 0;
     }, [prices]);
 
-    // Calculate Derivatives (memoized to prevent infinite loops)
+    // Calculate Derivatives
     const activeLots = React.useMemo(() => {
         return portfolio.lots.map(lot => {
             const currentPrice = getLatestPrice(lot.symbol);
             const marketValue = currentPrice * lot.qty;
             const gainLoss = marketValue - lot.costBasis;
 
-            // Holding period
             const openDate = new Date(lot.openDate);
             const today = new Date();
             const diffYears = (today - openDate) / (1000 * 60 * 60 * 24 * 365.25);
@@ -118,26 +116,100 @@ const StocksDashboard = () => {
     const totalGain = totalValue - totalCost;
     const totalGainPct = totalCost > 0 ? (totalGain / totalCost) * 100 : 0;
 
-    // Tax Sim Logic - use primitive count as dependency to avoid infinite loop
+    // Tax Sim Logic
     const lotsCount = activeLots.length;
     useEffect(() => {
         if (lotsCount === 0 || totalValue === 0) return;
 
-        const baseTax = calculateTotalTax(w2Income, 0);
-        const augmentedLots = activeLots.map(lot => {
+        // Original Script Logic: Independent Lot Calculation based on W2 Bracket rates
+        const FED_BRACKETS = [
+            { limit: 23200, rate: 0.10 },
+            { limit: 94300, rate: 0.12 },
+            { limit: 201050, rate: 0.22 },
+            { limit: 383900, rate: 0.24 },
+            { limit: 487450, rate: 0.32 },
+            { limit: 731200, rate: 0.35 },
+            { limit: Infinity, rate: 0.37 }
+        ];
+
+        const CA_BRACKETS = [
+            { limit: 20824, rate: 0.01 },
+            { limit: 49368, rate: 0.02 },
+            { limit: 77918, rate: 0.04 },
+            { limit: 108162, rate: 0.06 },
+            { limit: 136700, rate: 0.08 },
+            { limit: 349138, rate: 0.093 },
+            { limit: 418962, rate: 0.103 },
+            { limit: 698272, rate: 0.113 },
+            { limit: 1396542, rate: 0.123 },
+            { limit: Infinity, rate: 0.133 }
+        ];
+
+        let fedRate = 0;
+        for (let b of FED_BRACKETS) {
+            if (w2Income < b.limit) {
+                fedRate = b.rate;
+                break;
+            }
+        }
+
+        let ltcgRate = 0.15;
+        if (w2Income > 583750) ltcgRate = 0.20;
+        if (w2Income < 94050) ltcgRate = 0.00;
+
+        let caRate = 0.093;
+        for (let b of CA_BRACKETS) {
+            if (w2Income < b.limit) {
+                caRate = b.rate;
+                break;
+            }
+        }
+
+        const NIIT_THRESHOLD = 250000;
+        const NIIT_RATE = 0.038;
+
+        const getLotTax = (lot) => {
+            const gain = Math.max(0, lot.gainLoss);
             const isLongTerm = lot.holdingPeriod === 'Long Term';
-            const taxWithLot = calculateTotalTax(w2Income + (isLongTerm ? 0 : lot.gainLoss), isLongTerm ? Math.max(0, lot.gainLoss) : 0);
-            const marginalTax = taxWithLot - baseTax;
-            return { ...lot, estTax: marginalTax, efficiency: marginalTax / lot.marketValue };
+            let totalRate = caRate;
+
+            if (isLongTerm) {
+                totalRate += ltcgRate;
+            } else {
+                totalRate += fedRate;
+            }
+
+            if (w2Income > NIIT_THRESHOLD) totalRate += NIIT_RATE;
+            return gain * totalRate;
+        };
+
+        const augmentedLots = activeLots.map(lot => {
+            const tax = getLotTax(lot);
+            return {
+                ...lot,
+                estTax: tax,
+                efficiency: tax / lot.marketValue
+            };
         }).sort((a, b) => a.efficiency - b.efficiency);
 
         const points = [];
-        let cumP = 0, cumT = 0, cumB = 0;
+        let cumP = 0, cumB = 0, cumT = 0;
         augmentedLots.forEach(lot => {
             cumP += lot.marketValue;
             cumB += lot.costBasis;
             cumT += lot.estTax;
-            points.push({ x: cumP, y: cumT, basis: cumB, lot });
+
+            const cumGain = cumP - cumB;
+            // Original Logic: (Cumulative Tax / Cumulative Gain) * 100
+            const marginalRate = cumGain > 0 ? (cumT / cumGain) * 100 : 0;
+
+            points.push({
+                x: cumP,
+                y: cumT,
+                basis: cumB,
+                lot,
+                marginalRate
+            });
         });
         setTaxSimData(points);
     }, [lotsCount, totalValue, w2Income]);
@@ -148,7 +220,7 @@ const StocksDashboard = () => {
         totalCost,
         totalGain,
         totalGainPct,
-        xirr: calculateXIRR(activeLots, totalValue),
+        xirr: calculateXIRR(activeLots, totalValue) || 0,
         totalTax: taxSimData.length > 0 ? taxSimData[taxSimData.length - 1].y : 0
     };
 
@@ -156,7 +228,7 @@ const StocksDashboard = () => {
     const netGainStats = {
         netGain,
         netGainPct: totalCost > 0 ? (netGain / totalCost) * 100 : 0,
-        netXirr: calculateXIRR(activeLots, totalValue - stats.totalTax)
+        netXirr: calculateXIRR(activeLots, totalValue - stats.totalTax) || 0
     };
 
     const planLots = [];
@@ -173,15 +245,33 @@ const StocksDashboard = () => {
         if (pricesCount === 0 || lotsCount === 0) return;
 
         const firstSymbol = Object.keys(prices)[0];
-        const dates = Object.keys(prices[firstSymbol] || {}).sort();
+        let dates = Object.keys(prices[firstSymbol] || {}).sort();
+
+        const earliestDate = activeLots.reduce((min, lot) => {
+            return !min || lot.openDate < min ? lot.openDate : min;
+        }, null);
+
+        if (earliestDate) {
+            dates = dates.filter(d => d >= earliestDate);
+        }
+
         const hist = dates.map(date => {
             let v = 0, c = 0;
             activeLots.forEach(lot => {
-                const p = (prices[lot.symbol] && prices[lot.symbol][date]) || getLatestPrice(lot.symbol);
-                v += p * lot.qty;
-                c += lot.costBasis;
+                let p = (prices[lot.symbol] && prices[lot.symbol][date]);
+                if (p === undefined || p === null) {
+                    p = getLatestPrice(lot.symbol);
+                }
+                if (typeof p !== 'number' || isNaN(p)) p = 0;
+
+                if (lot.openDate <= date) {
+                    const cost = lot.costBasis || 0;
+                    const qty = lot.qty || 0;
+                    if (!isNaN(cost)) c += cost;
+                    if (!isNaN(p) && !isNaN(qty)) v += p * qty;
+                }
             });
-            return { date, value: v, cost: c, netValue: v * 0.85 }; // netValue mock
+            return { date, value: v || 0, cost: c || 0, netValue: (v || 0) * 0.85 };
         });
         setHistoryData(hist);
     }, [pricesCount, lotsCount]);

@@ -15,13 +15,12 @@ const Toolbar = ({ w2Income, setW2Income, files, onFileUpload, onFileRemove }) =
     <div className="actions-toolbar">
       <div className="actions-group">
         <div className="w2-input-wrapper">
-          <label htmlFor="w2Income">W2 Income</label>
           <input
             type="number"
             id="w2Income"
             value={w2Income || ''}
             onChange={(e) => setW2Income(parseFloat(e.target.value) || 0)}
-            placeholder="e.g. 150000"
+            placeholder="e.g. 500000"
             min="0"
             className="toolbar-input"
           />

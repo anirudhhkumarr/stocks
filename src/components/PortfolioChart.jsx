@@ -8,10 +8,11 @@ const PortfolioChart = ({ historyData }) => {
         value: true,
         netValue: true,
         cost: true,
-        tax: false
+        tax: true
     });
     const [isLogScale, setIsLogScale] = useState(false);
-    const [range, setRange] = useState('max');
+    const [range, setRange] = useState('1y');
+    const [isYearlyTicks, setIsYearlyTicks] = useState(false);
 
     useEffect(() => {
         if (!historyData || historyData.length === 0) return;
@@ -19,7 +20,7 @@ const PortfolioChart = ({ historyData }) => {
         const renderChart = () => {
             const container = containerRef.current;
             const { width, height } = container.getBoundingClientRect();
-            const margin = { top: 20, right: 30, bottom: 60, left: 60 };
+            const margin = { top: 20, right: 60, bottom: 40, left: 60 };
             const innerWidth = width - margin.left - margin.right;
             const innerHeight = height - margin.top - margin.bottom;
 
@@ -34,7 +35,26 @@ const PortfolioChart = ({ historyData }) => {
 
             // Filter data by range
             let filteredData = historyData;
-            if (range !== 'max') {
+
+            // Yearly Ticks Logic (Original Implementation)
+            if (isYearlyTicks && historyData.length > 0) {
+                const lastDataPoint = historyData[historyData.length - 1];
+                const lastDateObj = new Date(lastDataPoint.date);
+                const targetDates = new Set();
+                const minYear = new Date(historyData[0].date).getFullYear();
+
+                let currentCursor = new Date(lastDateObj);
+
+                // Keep adding dates as long as we haven't gone past the start year
+                while (currentCursor.getFullYear() >= minYear) {
+                    const dateStr = currentCursor.toISOString().split('T')[0];
+                    targetDates.add(dateStr);
+                    currentCursor.setFullYear(currentCursor.getFullYear() - 1);
+                }
+
+                filteredData = historyData.filter(d => targetDates.has(d.date));
+            }
+            else if (range !== 'max') {
                 const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
                 const days = daysMap[range] || 0;
                 const cutoff = new Date();
@@ -82,6 +102,13 @@ const PortfolioChart = ({ historyData }) => {
                 .y0(d => y(d.netValue))
                 .y1(d => y(d.cost));
 
+            // Curve Factory
+            const curve = d3.curveMonotoneX; // Smooth lines generally
+            // For Yearly ticks, maybe linear is better? But original used standard.
+
+            taxArea.curve(curve);
+            gainArea.curve(curve);
+
             if (visibleSeries.tax && visibleSeries.value && visibleSeries.netValue) {
                 svg.append('path')
                     .datum(filteredData)
@@ -99,7 +126,8 @@ const PortfolioChart = ({ historyData }) => {
             // Lines
             const line = (key) => d3.line()
                 .x(d => x(new Date(d.date)))
-                .y(d => y(d[key]));
+                .y(d => y(d[key]))
+                .curve(curve);
 
             const colors = { value: '#10b981', netValue: '#f59e0b', cost: '#3b82f6' };
 
@@ -111,26 +139,145 @@ const PortfolioChart = ({ historyData }) => {
                         .attr('stroke', color)
                         .attr('stroke-width', 2)
                         .attr('d', line(key));
+
+                    // Add points for Yearly View
+                    if (isYearlyTicks) {
+                        svg.selectAll(`.point-${key}`)
+                            .data(filteredData)
+                            .enter()
+                            .append('circle')
+                            .attr('class', `point-${key}`)
+                            .attr('cx', d => x(new Date(d.date)))
+                            .attr('cy', d => y(d[key]))
+                            .attr('r', 4)
+                            .attr('fill', color)
+                            .attr('stroke', '#1f2937')
+                            .attr('stroke-width', 1);
+                    }
                 }
             });
 
             // Axes
             svg.append('g')
                 .attr('transform', `translate(0,${innerHeight})`)
-                .call(d3.axisBottom(x).ticks(innerWidth / 100).tickFormat(d3.timeFormat("%b %y")))
-                .call(g => g.select(".domain").remove())
+                .call(d3.axisBottom(x).ticks(innerWidth / 100).tickFormat(d3.timeFormat(isYearlyTicks ? "%Y" : "%b %y")))
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
 
             svg.append('g')
-                .call(d3.axisLeft(y).ticks(5).tickFormat(d => '$' + (d / 1000) + 'k'))
-                .call(g => g.select(".domain").remove())
+                .call(d3.axisLeft(y).ticks(5).tickFormat(d => '$' + Math.round(d / 1000) + 'k'))
                 .selectAll('text').style('fill', '#9ca3af').style('font-size', '11px');
+
+            // Tooltip Interactions
+            const tooltip = svg.append('g').attr('class', 'tooltip').style('display', 'none');
+
+            // Vertical Guide Line
+            tooltip.append('line')
+                .attr('class', 'guide-line')
+                .attr('y1', 0)
+                .attr('y2', innerHeight)
+                .attr('stroke', '#4b5563')
+                .attr('stroke-dasharray', '4 4')
+                .attr('stroke-width', 1);
+
+            // Points and Labels
+            const tooltipPoints = {};
+            const tooltipTexts = {};
+
+            Object.entries(colors).forEach(([key, color]) => {
+                if (visibleSeries[key]) {
+                    // Circle
+                    tooltipPoints[key] = tooltip.append('circle')
+                        .attr('r', 4)
+                        .attr('fill', color)
+                        .attr('stroke', '#1f2937')
+                        .attr('stroke-width', 2);
+
+                    // Value Text
+                    tooltipTexts[key] = tooltip.append('text')
+                        .attr('fill', '#e5e7eb')
+                        .style('font-size', '11px')
+                        .style('font-weight', 'bold')
+                        .style('text-shadow', '0 1px 2px rgba(0,0,0,0.8)');
+                }
+            });
+
+            // Tooltip Card (Date Label + Values)
+            // Simplified: Just showing Date label near top for now, or near cursor
+            const tooltipLabel = tooltip.append('text')
+                .attr('x', 10)
+                .attr('y', 0) // slightly above
+                .attr('fill', '#e5e7eb')
+                .style('font-size', '12px')
+                .style('font-weight', 'bold');
+
+            // Overlay for capturing events
+            svg.append('rect')
+                .attr('width', innerWidth)
+                .attr('height', innerHeight)
+                .attr('fill', 'transparent')
+                .on('mouseover', () => tooltip.style('display', null))
+                .on('mouseout', () => tooltip.style('display', 'none'))
+                .on('mousemove', (event) => {
+                    const bisectDate = d3.bisector(d => new Date(d.date)).left;
+                    const x0 = x.invert(d3.pointer(event)[0]);
+                    const i = bisectDate(filteredData, x0, 1);
+                    const d0 = filteredData[i - 1];
+                    const d1 = filteredData[i];
+                    let d = d0;
+                    if (d1 && d0) {
+                        d = x0 - new Date(d0.date) > new Date(d1.date) - x0 ? d1 : d0;
+                    }
+
+                    if (!d) return;
+
+                    const tx = x(new Date(d.date));
+                    tooltip.attr('transform', `translate(${tx},0)`);
+
+                    // Update points and texts
+                    Object.entries(tooltipPoints).forEach(([key, circle]) => {
+                        const val = d[key];
+                        const text = tooltipTexts[key];
+
+                        // Safety check for NaN
+                        if (val !== undefined && !isNaN(val)) {
+                            const yPos = y(val);
+                            circle.attr('cy', yPos).style('visibility', 'visible');
+
+                            const valStr = '$' + Math.round(val / 1000) + 'k';
+                            text.attr('y', yPos - 8)
+                                .attr('x', 8)
+                                .text(valStr)
+                                .style('visibility', 'visible');
+
+                            if (tx > innerWidth - 60) {
+                                text.attr('x', -8).attr('text-anchor', 'end');
+                            } else {
+                                text.attr('x', 8).attr('text-anchor', 'start');
+                            }
+                        } else {
+                            circle.style('visibility', 'hidden');
+                            text.style('visibility', 'hidden');
+                        }
+                    });
+
+                    // Update label
+                    // Adjust label position to not go off screen?
+                    // For now simple left/right logic
+                    const dateStr = d3.timeFormat("%b %d, %Y")(new Date(d.date));
+                    tooltipLabel.text(dateStr);
+
+                    if (tx > innerWidth - 100) {
+                        tooltipLabel.attr('text-anchor', 'end').attr('x', -10);
+                    } else {
+                        tooltipLabel.attr('text-anchor', 'start').attr('x', 10);
+                    }
+                });
         };
 
         renderChart();
         window.addEventListener('resize', renderChart);
         return () => window.removeEventListener('resize', renderChart);
-    }, [historyData, visibleSeries, isLogScale, range]);
+    }, [historyData, visibleSeries, isLogScale, range, isYearlyTicks]);
 
     return (
         <div className="card chart-card">
@@ -138,8 +285,9 @@ const PortfolioChart = ({ historyData }) => {
                 <h3>Portfolio History</h3>
                 <div className="chart-controls">
                     <button className={`filter-btn ${isLogScale ? 'active' : ''}`} onClick={() => setIsLogScale(!isLogScale)}>Log</button>
+                    <button className={`filter-btn ${isYearlyTicks ? 'active' : ''}`} onClick={() => setIsYearlyTicks(!isYearlyTicks)}>Yearly</button>
                     <div className="divider" />
-                    {['1m', '6m', '1y', 'max'].map(r => (
+                    {!isYearlyTicks && ['1m', '6m', '1y', '2y', '3y', '5y', 'max'].map(r => (
                         <button key={r} className={`filter-btn ${range === r ? 'active' : ''}`} onClick={() => setRange(r)}>
                             {r.toUpperCase()}
                         </button>
@@ -149,7 +297,7 @@ const PortfolioChart = ({ historyData }) => {
             <div className="chart-container" ref={containerRef} style={{ height: '350px', position: 'relative' }}>
                 <svg ref={svgRef} />
             </div>
-            <div className="legend">
+            <div className="chart-legend" style={{ display: 'flex', gap: '15px', marginTop: '10px', marginLeft: '60px' }}>
                 {[
                     { key: 'value', label: 'Market Value', color: '#10b981' },
                     { key: 'netValue', label: 'Net Liquidation', color: '#f59e0b' },
@@ -158,14 +306,18 @@ const PortfolioChart = ({ historyData }) => {
                 ].map(item => (
                     <div
                         key={item.key}
-                        className={`legend-item ${visibleSeries[item.key] ? 'active' : ''}`}
                         onClick={() => setVisibleSeries(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+                        style={{
+                            display: 'flex', alignItems: 'center', cursor: 'pointer',
+                            opacity: visibleSeries[item.key] ? 1 : 0.5
+                        }}
                     >
-                        <span className="dot" style={{ backgroundColor: item.color }} />
-                        <span className="label">{item.label}</span>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: item.color, marginRight: 5 }}></div>
+                        <span style={{ fontSize: '12px', color: '#9ca3af' }}>{item.label}</span>
                     </div>
                 ))}
             </div>
+
 
         </div>
     );
