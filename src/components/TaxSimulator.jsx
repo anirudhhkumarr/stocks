@@ -86,7 +86,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                 .y(d => yRate(d.y));
 
             if (visibleSeries.rate) {
-                const effectiveRateData = dataPoints.map(d => ({ x: d.x, y: d.x > 0 ? (d.y / d.x) * 100 : 0 }));
+                const effectiveRateData = dataPoints.map(d => ({ x: d.x, y: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0 }));
 
                 svg.append('path')
                     .datum(effectiveRateData)

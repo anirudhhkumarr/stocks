@@ -154,14 +154,11 @@ const StocksDashboard = () => {
             cumB += lot.costBasis;
             cumT += lotTaxDelta;
 
-            const marginalRate = Math.abs(lot.gainLoss) > 0.01 ? (lotTaxDelta / lot.gainLoss) * 100 : 0;
-
             points.push({
                 x: cumP,
                 y: cumT,
                 basis: cumB,
-                lot: { ...lot, estTax: lotTaxDelta, lotMarginalRate: marginalRate },
-                marginalRate
+                lot: { ...lot, estTax: lotTaxDelta }
             });
         });
         setTaxSimData(points);
