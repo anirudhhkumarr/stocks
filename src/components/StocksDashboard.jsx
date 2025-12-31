@@ -7,7 +7,7 @@ import LiquidationTable from './LiquidationTable';
 import TradeBubbleChart from './TradeBubbleChart';
 import { processPortfolioData } from '../utils/dataProcessor';
 import { fetchStockData } from '../utils/api';
-import { calculateXIRR, getTaxRates, calculateLotTax } from '../utils/calculations';
+import { calculateXIRR, getTaxRates, calculateLotTax, calculateTotalTax } from '../utils/calculations';
 
 const StocksDashboard = () => {
     const [files, setFiles] = useState(() => {
@@ -123,39 +123,50 @@ const StocksDashboard = () => {
     useEffect(() => {
         if (lotsCount === 0 || totalValue === 0) return;
 
-        const rates = getTaxRates(w2Income);
-
+        const staticRates = getTaxRates(w2Income);
         const augmentedLots = activeLots.map(lot => {
             const isLongTerm = lot.holdingPeriod === 'Long Term';
-            const tax = calculateLotTax(lot.gainLoss, isLongTerm, rates);
-            const lotMarginalRate = (rates.caRate + rates.niitRate + rates.mhRate + (isLongTerm ? rates.ltcgRate : rates.fedRate)) * 100;
-
+            const tax = calculateLotTax(lot.gainLoss, isLongTerm, staticRates);
             return {
                 ...lot,
                 estTax: tax,
-                efficiency: tax / lot.marketValue,
-                lotMarginalRate
+                efficiency: tax / (lot.marketValue || 1),
+                isLongTerm
             };
         }).sort((a, b) => a.efficiency - b.efficiency);
 
         const points = [];
+        let runningST = 0;
+        let runningLT = 0;
+        let prevTotalTax = calculateTotalTax(w2Income, 0, 0);
+
         let cumP = 0, cumB = 0, cumT = 0;
+
         augmentedLots.forEach(lot => {
+            if (lot.isLongTerm) runningLT += lot.gainLoss;
+            else runningST += lot.gainLoss;
+
+            const currentTotalTax = calculateTotalTax(w2Income, runningST, runningLT);
+            const lotTaxDelta = currentTotalTax - prevTotalTax;
+            prevTotalTax = currentTotalTax;
+
             cumP += lot.marketValue;
             cumB += lot.costBasis;
-            cumT += lot.estTax;
+            cumT += lotTaxDelta;
+
+            const marginalRate = Math.abs(lot.gainLoss) > 0.01 ? (lotTaxDelta / lot.gainLoss) * 100 : 0;
 
             points.push({
                 x: cumP,
                 y: cumT,
                 basis: cumB,
-                lot,
-                marginalRate: lot.lotMarginalRate
+                lot: { ...lot, estTax: lotTaxDelta, lotMarginalRate: marginalRate },
+                marginalRate
             });
         });
         setTaxSimData(points);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [lotsCount, totalValue, w2Income]);
+    }, [lotsCount, totalValue, w2Income, activeLots]);
 
     // Combined Stats
     const stats = {

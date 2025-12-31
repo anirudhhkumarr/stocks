@@ -85,42 +85,69 @@ export function calculateLotTax(gain, isLongTerm, rates) {
     return Math.max(0, gain) * totalRate;
 }
 
-export function calculateTotalTax(ordinaryIncome, ltcgIncome) {
-    let fedOrdTax = calculateTaxFromBrackets(ordinaryIncome, FED_BRACKETS);
+export function calculateTotalTax(w2Income, stcg, ltcg) {
+    // 1. Federal Ordinary Income Tax (W2 + STCG)
+    // Capital Loss Rule: Net capital losses can offset up to $3,000 of W2 income
+    let netCapitalGain = stcg + ltcg;
+    let taxableOrdinary = w2Income;
+    let effectiveLtcg = ltcg;
+
+    if (netCapitalGain < 0) {
+        // Offset W2 up to $3000
+        const lossOffset = Math.max(netCapitalGain, -3000);
+        taxableOrdinary += lossOffset;
+        effectiveLtcg = 0;
+    } else {
+        // Net gain is positive. STCG is taxed as ordinary. 
+        // LTCG is taxed at special rates but its position in the stack depends on ordinary income.
+        taxableOrdinary += Math.max(0, stcg);
+    }
+
+    let fedOrdTax = calculateTaxFromBrackets(taxableOrdinary, FED_BRACKETS);
+
+    // 2. Federal LTCG Tax (Progressive stacking on top of ordinary)
     let fedLtcgTax = 0;
-    const totalIncome = ordinaryIncome + ltcgIncome;
+    if (effectiveLtcg > 0) {
+        let remainingLtcg = effectiveLtcg;
+        let currentStack = taxableOrdinary;
 
-    let remainingLtcg = ltcgIncome;
-    let currentStack = ordinaryIncome;
+        // 0% Bracket
+        const limit0 = FED_LTCG_BRACKETS[0].limit;
+        if (currentStack < limit0) {
+            const space = limit0 - currentStack;
+            const taxedAt0 = Math.min(space, remainingLtcg);
+            remainingLtcg -= taxedAt0;
+            currentStack += taxedAt0;
+        }
 
-    const limit0 = FED_LTCG_BRACKETS[0].limit;
-    if (currentStack < limit0) {
-        const space = limit0 - currentStack;
-        const taxedAt0 = Math.min(space, remainingLtcg);
-        remainingLtcg -= taxedAt0;
-        currentStack += taxedAt0;
+        // 15% Bracket
+        const limit15 = FED_LTCG_BRACKETS[1].limit;
+        if (remainingLtcg > 0 && currentStack < limit15) {
+            const space = limit15 - currentStack;
+            const taxedAt15 = Math.min(space, remainingLtcg);
+            fedLtcgTax += taxedAt15 * 0.15;
+            remainingLtcg -= taxedAt15;
+            currentStack += taxedAt15;
+        }
+
+        // 20% Bracket
+        if (remainingLtcg > 0) {
+            fedLtcgTax += remainingLtcg * 0.20;
+        }
     }
 
-    const limit15 = FED_LTCG_BRACKETS[1].limit;
-    if (remainingLtcg > 0 && currentStack < limit15) {
-        const space = limit15 - currentStack;
-        const taxedAt15 = Math.min(space, remainingLtcg);
-        fedLtcgTax += taxedAt15 * 0.15;
-        remainingLtcg -= taxedAt15;
-        currentStack += taxedAt15;
-    }
-
-    if (remainingLtcg > 0) {
-        fedLtcgTax += remainingLtcg * 0.20;
-    }
-
+    // 3. NIIT (3.8% on lesser of Net Investment Income or excess AGI)
     let niitTax = 0;
-    if (totalIncome > NIIT_THRESHOLD) {
-        const subjectToNiit = Math.min(ltcgIncome, totalIncome - NIIT_THRESHOLD);
-        if (subjectToNiit > 0) niitTax = subjectToNiit * NIIT_RATE;
+    const agi = w2Income + stcg + ltcg;
+    if (agi > NIIT_THRESHOLD) {
+        const netInvestmentIncome = Math.max(0, stcg + ltcg);
+        const excessAgi = agi - NIIT_THRESHOLD;
+        niitTax = Math.min(netInvestmentIncome, excessAgi) * NIIT_RATE;
     }
 
-    const caTaxable = totalIncome;
+    // 4. CA State Tax (Progressive on total income)
+    // CA treats capital gains as ordinary income
+    const caTaxable = Math.max(0, w2Income + stcg + ltcg);
     let caTax = calculateTaxFromBrackets(caTaxable, CA_BRACKETS);
 
     if (caTaxable > CA_MENTAL_HEALTH_THRESHOLD) {
