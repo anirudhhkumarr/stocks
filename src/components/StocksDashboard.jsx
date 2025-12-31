@@ -4,6 +4,7 @@ import SummaryRibbon from './SummaryRibbon';
 import PortfolioChart from './PortfolioChart';
 import TaxSimulator from './TaxSimulator';
 import LiquidationTable from './LiquidationTable';
+import TradeBubbleChart from './TradeBubbleChart';
 import { processPortfolioData } from '../utils/dataProcessor';
 import { fetchStockData } from '../utils/api';
 import { calculateXIRR, getTaxRates, calculateLotTax } from '../utils/calculations';
@@ -250,6 +251,10 @@ const StocksDashboard = () => {
                     onTargetChange={setTargetAmount}
                     totalValue={totalValue}
                 />
+            </div>
+
+            <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
+                <TradeBubbleChart lots={planLots} allLots={activeLots} />
             </div>
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />
