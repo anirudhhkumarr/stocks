@@ -65,10 +65,14 @@ const MFDashboard = () => {
         if (allDates.length === 0) return [];
         if (range === 'max') return allDates;
 
+        const latestDateStr = allDates[allDates.length - 1];
+        const latestDate = new Date(latestDateStr);
+
         const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
         const days = daysMap[range] || 365;
-        const cutoff = new Date();
-        cutoff.setDate(cutoff.getDate() - days);
+
+        const cutoff = new Date(latestDate);
+        cutoff.setDate(latestDate.getDate() - days);
         const cutoffStr = cutoff.toISOString().split('T')[0];
 
         return allDates.filter(d => d >= cutoffStr);
@@ -109,7 +113,19 @@ const MFDashboard = () => {
             let v = 0;
             activeMFs.forEach(mf => {
                 const hist = mfData[mf.symbol];
-                if (hist && hist[date]) v += hist[date] * mf.units;
+                if (hist) {
+                    if (hist[date]) {
+                        v += hist[date] * mf.units;
+                    } else {
+                        // Fallback: use closest previous value
+                        const availableDates = Object.keys(hist).sort();
+                        const prevDate = availableDates.filter(d => d < date).pop();
+                        if (prevDate) v += hist[prevDate] * mf.units;
+                        else if (availableDates.length > 0 && date > availableDates[availableDates.length - 1]) {
+                            v += hist[availableDates[availableDates.length - 1]] * mf.units;
+                        }
+                    }
+                }
             });
             return v;
         };
