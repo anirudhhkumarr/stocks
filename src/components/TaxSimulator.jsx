@@ -86,7 +86,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                 .y(d => yRate(d.y));
 
             if (visibleSeries.rate) {
-                const effectiveRateData = dataPoints.map(d => ({ x: d.x, y: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0 }));
+                const effectiveRateData = dataPoints.map(d => ({ x: d.x, y: d.x > 0 ? (d.y / d.x) * 100 : 0 }));
 
                 svg.append('path')
                     .datum(effectiveRateData)
@@ -175,7 +175,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                         basis: d.basis,
                         gain: Math.max(0, d.x - d.basis - d.y),
                         tax: d.y,
-                        rate: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0
+                        rate: d.x > 0 ? (d.y / d.x) * 100 : 0
                     };
 
                     // Stack Logic for Tooltip Dots
