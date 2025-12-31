@@ -145,11 +145,13 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 });
             }
 
-            // Calculate Y Extent based on normalized price history and bubbles
+            // Calculate Y Extent based on normalized price history and bubbles of SELECTED symbols
             let yDomain = [-10, 10]; // Default
             const historyPoints = [];
+            const activeSymbols = selectedSymbols ? Array.from(selectedSymbols) : symbols;
+
             if (prices) {
-                symbols.forEach(symbol => {
+                activeSymbols.forEach(symbol => {
                     const history = prices[symbol];
                     const base = basePrices[symbol];
                     if (!history || !base) return;
@@ -163,8 +165,13 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             }
 
             baseChartData.forEach(d => {
-                const base = basePrices[d.symbol];
-                if (base) {
+                // Determine the actual symbol for price lookup, handling 'Year X' groups
+                const actualSymbol = d.isGrouped && d.symbol.startsWith('Year ') ? null : d.symbol;
+                const base = actualSymbol ? basePrices[actualSymbol] : null;
+
+                // Only include in Y-domain calculation if it's a selected symbol (or no selection is active)
+                // and if it's not a 'Year X' group (as these don't have individual stock prices)
+                if (base && (!selectedSymbols || selectedSymbols.has(actualSymbol))) {
                     historyPoints.push(((d.costBasis / d.qty) / base - 1) * 100);
                 }
             });
@@ -175,7 +182,6 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             }
 
             const yScaleType = isLogScale ? d3.scaleLog : d3.scaleLinear;
-            const yOffset = isLogScale ? 100.1 : 0; // Avoid 0/neg in log for percentages
 
             const y = yScaleType()
                 .domain(isLogScale

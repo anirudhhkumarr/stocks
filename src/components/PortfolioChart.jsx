@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as d3 from 'd3';
 
-const PortfolioChart = ({ historyData, range, setRange, isLogScale, isYearlyTicks }) => {
+const PortfolioChart = ({ historyData, range, isLogScale, isYearlyTicks }) => {
     const svgRef = useRef(null);
     const containerRef = useRef(null);
     const [visibleSeries, setVisibleSeries] = useState({
