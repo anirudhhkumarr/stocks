@@ -8,8 +8,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
         basis: true,
         gain: true,
         tax: true,
-        rate: true,
-        marginal: true
+        rate: true
     });
 
     useEffect(() => {
@@ -186,8 +185,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                         basis: d.basis,
                         gain: Math.max(0, d.x - d.basis - d.y),
                         tax: d.y,
-                        rate: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0,
-                        marginal: d.marginalRate || 0
+                        rate: (d.x - d.basis) > 0 ? (d.y / (d.x - d.basis)) * 100 : 0
                     };
 
                     // Stack Logic for Tooltip Dots
@@ -299,8 +297,7 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                     { key: 'basis', label: 'Capital Invested', color: '#3b82f6' },
                     { key: 'gain', label: 'Net Gain', color: '#10b981' },
                     { key: 'tax', label: 'Tax Liability', color: '#ef4444' },
-                    { key: 'rate', label: 'Effective Rate', color: '#f59e0b' },
-                    { key: 'marginal', label: 'Marginal Rate', color: '#8b5cf6' }
+                    { key: 'rate', label: 'Effective Rate', color: '#f59e0b' }
                 ].map(item => (
                     <div key={item.key}
                         onClick={() => setVisibleSeries(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
