@@ -37,6 +37,45 @@ export function calculateTaxFromBrackets(income, brackets) {
     return tax;
 }
 
+export function getTaxRates(w2Income) {
+    let fedRate = 0;
+    for (let b of FED_BRACKETS) {
+        if (w2Income < b.limit) {
+            fedRate = b.rate;
+            break;
+        }
+    }
+
+    let ltcgRate = 0.15;
+    if (w2Income > 583750) ltcgRate = 0.20;
+    if (w2Income < 94050) ltcgRate = 0.00;
+
+    let caRate = 0.093;
+    for (let b of CA_BRACKETS) {
+        if (w2Income < b.limit) {
+            caRate = b.rate;
+            break;
+        }
+    }
+
+    const niitRate = w2Income > NIIT_THRESHOLD ? NIIT_RATE : 0;
+
+    return { fedRate, ltcgRate, caRate, niitRate };
+}
+
+export function calculateLotTax(gain, isLongTerm, rates) {
+    const { fedRate, ltcgRate, caRate, niitRate } = rates;
+    let totalRate = caRate + niitRate;
+
+    if (isLongTerm) {
+        totalRate += ltcgRate;
+    } else {
+        totalRate += fedRate;
+    }
+
+    return Math.max(0, gain) * totalRate;
+}
+
 export function calculateTotalTax(ordinaryIncome, ltcgIncome) {
     let fedOrdTax = calculateTaxFromBrackets(ordinaryIncome, FED_BRACKETS);
     let fedLtcgTax = 0;

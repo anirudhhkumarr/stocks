@@ -6,7 +6,7 @@ import TaxSimulator from './TaxSimulator';
 import LiquidationTable from './LiquidationTable';
 import { processPortfolioData } from '../utils/dataProcessor';
 import { fetchStockData } from '../utils/api';
-import { calculateXIRR } from '../utils/calculations';
+import { calculateXIRR, getTaxRates, calculateLotTax } from '../utils/calculations';
 
 const StocksDashboard = () => {
     const [files, setFiles] = useState(() => {
@@ -119,70 +119,10 @@ const StocksDashboard = () => {
     useEffect(() => {
         if (lotsCount === 0 || totalValue === 0) return;
 
-        // Original Script Logic: Independent Lot Calculation based on W2 Bracket rates
-        const FED_BRACKETS = [
-            { limit: 23200, rate: 0.10 },
-            { limit: 94300, rate: 0.12 },
-            { limit: 201050, rate: 0.22 },
-            { limit: 383900, rate: 0.24 },
-            { limit: 487450, rate: 0.32 },
-            { limit: 731200, rate: 0.35 },
-            { limit: Infinity, rate: 0.37 }
-        ];
-
-        const CA_BRACKETS = [
-            { limit: 20824, rate: 0.01 },
-            { limit: 49368, rate: 0.02 },
-            { limit: 77918, rate: 0.04 },
-            { limit: 108162, rate: 0.06 },
-            { limit: 136700, rate: 0.08 },
-            { limit: 349138, rate: 0.093 },
-            { limit: 418962, rate: 0.103 },
-            { limit: 698272, rate: 0.113 },
-            { limit: 1396542, rate: 0.123 },
-            { limit: Infinity, rate: 0.133 }
-        ];
-
-        let fedRate = 0;
-        for (let b of FED_BRACKETS) {
-            if (w2Income < b.limit) {
-                fedRate = b.rate;
-                break;
-            }
-        }
-
-        let ltcgRate = 0.15;
-        if (w2Income > 583750) ltcgRate = 0.20;
-        if (w2Income < 94050) ltcgRate = 0.00;
-
-        let caRate = 0.093;
-        for (let b of CA_BRACKETS) {
-            if (w2Income < b.limit) {
-                caRate = b.rate;
-                break;
-            }
-        }
-
-        const NIIT_THRESHOLD = 250000;
-        const NIIT_RATE = 0.038;
-
-        const getLotTax = (lot) => {
-            const gain = Math.max(0, lot.gainLoss);
-            const isLongTerm = lot.holdingPeriod === 'Long Term';
-            let totalRate = caRate;
-
-            if (isLongTerm) {
-                totalRate += ltcgRate;
-            } else {
-                totalRate += fedRate;
-            }
-
-            if (w2Income > NIIT_THRESHOLD) totalRate += NIIT_RATE;
-            return gain * totalRate;
-        };
+        const rates = getTaxRates(w2Income);
 
         const augmentedLots = activeLots.map(lot => {
-            const tax = getLotTax(lot);
+            const tax = calculateLotTax(lot.gainLoss, lot.holdingPeriod === 'Long Term', rates);
             return {
                 ...lot,
                 estTax: tax,
@@ -198,7 +138,6 @@ const StocksDashboard = () => {
             cumT += lot.estTax;
 
             const cumGain = cumP - cumB;
-            // Original Logic: (Cumulative Tax / Cumulative Gain) * 100
             const marginalRate = cumGain > 0 ? (cumT / cumGain) * 100 : 0;
 
             points.push({
@@ -240,9 +179,11 @@ const StocksDashboard = () => {
 
     // History Data Prep
     const pricesCount = Object.keys(prices).length;
+
     useEffect(() => {
         if (pricesCount === 0 || lotsCount === 0) return;
 
+        const rates = getTaxRates(w2Income);
         const firstSymbol = Object.keys(prices)[0];
         let dates = Object.keys(prices[firstSymbol] || {}).sort();
 
@@ -255,7 +196,9 @@ const StocksDashboard = () => {
         }
 
         const hist = dates.map(date => {
-            let v = 0, c = 0;
+            let v = 0, c = 0, tax = 0;
+            const dateObj = new Date(date);
+
             activeLots.forEach(lot => {
                 let p = (prices[lot.symbol] && prices[lot.symbol][date]);
                 if (p === undefined || p === null) {
@@ -266,15 +209,26 @@ const StocksDashboard = () => {
                 if (lot.openDate <= date) {
                     const cost = lot.costBasis || 0;
                     const qty = lot.qty || 0;
+                    const lotValue = p * qty;
+                    const gain = Math.max(0, lotValue - cost);
+
+                    // Determine if long term at this date
+                    const openDate = new Date(lot.openDate);
+                    const diffYears = (dateObj - openDate) / (1000 * 60 * 60 * 24 * 365.25);
+                    const isLongTerm = diffYears >= 1;
+
+                    // Calculate tax for this lot using the same centralized utility
+                    tax += calculateLotTax(gain, isLongTerm, rates);
+
                     if (!isNaN(cost)) c += cost;
-                    if (!isNaN(p) && !isNaN(qty)) v += p * qty;
+                    if (!isNaN(lotValue)) v += lotValue;
                 }
             });
-            return { date, value: v || 0, cost: c || 0, netValue: (v || 0) * 0.85 };
+            return { date, value: v || 0, cost: c || 0, netValue: (v || 0) - tax };
         });
         setHistoryData(hist);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pricesCount, lotsCount]);
+    }, [pricesCount, lotsCount, w2Income]);
 
     return (
         <div className="stocks-dashboard">

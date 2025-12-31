@@ -26,19 +26,17 @@ const SummaryRibbon = ({ stats, netGainStats }) => {
             <div className="stat-card">
                 <div className="card-title">Performance</div>
                 <div className={`primary-value ${stats.totalGain >= 0 ? 'positive' : 'negative'}`} id="totalGainValue">
-                    {stats.totalGain ? formatCurrency(stats.totalGain) : 'Loading...'}
+                    {stats.totalGain >= 0 ? '+' : ''}{stats.totalGain ? formatCurrency(stats.totalGain) : 'Loading...'}
                 </div>
-                <div className="secondary-row">
-                    <div className="badge-row">
-                        <span className={`trend-badge ${stats.totalGainPct >= 0 ? 'positive' : 'negative'}`} id="totalGainBadge">
-                            {stats.totalGainPct >= 0 ? '▲' : '▼'} {stats.totalGainPct ? formatPercent(stats.totalGainPct) : '0%'}
-                        </span>
-                        <span className="badge-label">Total Gain</span>
-                    </div>
-                    <div className="metric-row">
-                        <span className="metric-label">XIRR:</span>
-                        <span className="metric-value" id="currentXIRR">{stats.xirr ? formatPercent(stats.xirr * 100) : '--'}</span>
-                    </div>
+                <div className="secondary-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                    <span className={`trend-badge ${stats.totalGainPct >= 0 ? 'positive' : 'negative'}`} id="totalGainBadge" style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '13px', fontWeight: '600' }}>
+                        {stats.totalGainPct >= 0 ? '▲' : '▼'} {stats.totalGainPct ? formatPercent(stats.totalGainPct) : '0%'}
+                    </span>
+                    <span style={{ color: '#6b7280', fontSize: '12px' }}>Total Return</span>
+                </div>
+                <div className="metric-row" style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                    <span style={{ color: '#9ca3af', fontSize: '12px' }}>XIRR (Annualized)</span>
+                    <span style={{ color: '#10b981', fontSize: '14px', fontWeight: '600' }} id="currentXIRR">{stats.xirr ? formatPercent(stats.xirr * 100) : '--'}</span>
                 </div>
             </div>
 
@@ -46,21 +44,19 @@ const SummaryRibbon = ({ stats, netGainStats }) => {
             <div className="stat-card">
                 <div className="card-title">Net Gain (Post-Tax)</div>
                 <div className={`primary-value ${netGainStats.netGain >= 0 ? 'positive' : 'negative'}`} id="netGainValue">
-                    {netGainStats.netGain !== undefined ? formatCurrency(netGainStats.netGain) : 'Loading...'}
+                    {netGainStats.netGain >= 0 ? '+' : ''}{netGainStats.netGain !== undefined ? formatCurrency(netGainStats.netGain) : 'Loading...'}
                 </div>
-                <div className="secondary-row">
-                    <div className="badge-row">
-                        <span className={`trend-badge ${netGainStats.netGainPct >= 0 ? 'positive' : 'negative'}`} id="netGainBadge">
-                            {netGainStats.netGainPct >= 0 ? '▲' : '▼'} {netGainStats.netGainPct !== undefined ? formatPercent(netGainStats.netGainPct) : '0%'}
-                        </span>
-                        <span className="badge-label">After-Tax Return</span>
-                    </div>
-                    <div className="metric-row">
-                        <span className="metric-label">Net XIRR:</span>
-                        <span className="metric-value" id="netXirr">
-                            {netGainStats.netXirr !== undefined ? formatPercent(netGainStats.netXirr * 100) : '--'}
-                        </span>
-                    </div>
+                <div className="secondary-row" style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '8px' }}>
+                    <span className={`trend-badge ${netGainStats.netGainPct >= 0 ? 'positive' : 'negative'}`} id="netGainBadge" style={{ padding: '4px 10px', borderRadius: '12px', fontSize: '13px', fontWeight: '600' }}>
+                        {netGainStats.netGainPct >= 0 ? '▲' : '▼'} {netGainStats.netGainPct !== undefined ? formatPercent(netGainStats.netGainPct) : '0%'}
+                    </span>
+                    <span style={{ color: '#6b7280', fontSize: '12px' }}>After-Tax Return</span>
+                </div>
+                <div className="metric-row" style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: '8px' }}>
+                    <span style={{ color: '#9ca3af', fontSize: '12px' }}>Net XIRR</span>
+                    <span style={{ color: netGainStats.netXirr >= 0 ? '#10b981' : '#ef4444', fontSize: '14px', fontWeight: '600' }} id="netXirr">
+                        {netGainStats.netXirr !== undefined ? formatPercent(netGainStats.netXirr * 100) : '--'}
+                    </span>
                 </div>
             </div>
         </section>
