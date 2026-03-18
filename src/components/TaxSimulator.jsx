@@ -44,12 +44,24 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                 .domain([0, d3.max(dataPoints, d => d.x)])
                 .range([0, innerWidth]);
 
+            // Dynamic Domains
+            const maxY = series.length > 0
+                ? d3.max(series, s => d3.max(s, d => d[1]))
+                : d3.max(dataPoints, d => d.x);
+
+            const effectiveRateData = dataPoints.map(d => ({
+                x: d.x,
+                y: d.x > 0 ? (d.y / d.x) * 100 : 0
+            }));
+            const maxRate = d3.max(effectiveRateData, d => d.y) || 50;
+
             const y = d3.scaleLinear()
-                .domain([0, d3.max(dataPoints, d => d.x) * 1.1])
-                .range([innerHeight, 0]);
+                .domain([0, maxY * 1.1])
+                .range([innerHeight, 0])
+                .nice();
 
             const yRate = d3.scaleLinear()
-                .domain([0, 50])
+                .domain([0, Math.ceil(maxRate / 5) * 5 + 5]) // Nice rounding for rates
                 .range([innerHeight, 0]);
 
             // Grid Lines
@@ -86,7 +98,6 @@ const TaxSimulator = ({ dataPoints, targetAmount, onTargetChange, totalValue }) 
                 .y(d => yRate(d.y));
 
             if (visibleSeries.rate) {
-                const effectiveRateData = dataPoints.map(d => ({ x: d.x, y: d.x > 0 ? (d.y / d.x) * 100 : 0 }));
 
                 svg.append('path')
                     .datum(effectiveRateData)

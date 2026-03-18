@@ -4,7 +4,7 @@ import MFSummary from './MFSummary';
 import MFPerformanceChart from './MFPerformanceChart';
 import MFPortfolioGrowthChart from './MFPortfolioGrowthChart';
 import MFAllocationChart from './MFAllocationChart';
-import { fetchStockData } from '../utils/api';
+import { fetchStockDataSequential } from '../utils/api';
 import { FUND_METADATA } from '../utils/mfUtils';
 import { calculateXIRR } from '../utils/calculations';
 
@@ -31,19 +31,16 @@ const MFDashboard = () => {
         if (activeMFs.length === 0) return;
 
         const fetchAll = async () => {
+            const symbols = activeMFs.map(mf => mf.symbol);
+            if (Object.keys(usdInr).length === 0) symbols.push('INR=X');
+
+            const fetched = await fetchStockDataSequential(symbols, mfData);
+
             const newMfData = { ...mfData };
-            await Promise.all(activeMFs.map(async (mf) => {
-                if (!newMfData[mf.symbol]) {
-                    const data = await fetchStockData(mf.symbol);
-                    if (data) newMfData[mf.symbol] = data;
-                }
-            }));
-
-            if (Object.keys(usdInr).length === 0) {
-                const rateData = await fetchStockData('INR=X');
-                if (rateData) setUsdInr(rateData);
+            for (const [sym, data] of Object.entries(fetched)) {
+                if (sym === 'INR=X') setUsdInr(data);
+                else newMfData[sym] = data;
             }
-
             setMfData(newMfData);
         };
 

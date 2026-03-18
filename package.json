@@ -13,7 +13,8 @@
     "d3": "^7.9.0",
     "lucide-react": "^0.446.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "yahoo-finance2": "^3.13.2"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",

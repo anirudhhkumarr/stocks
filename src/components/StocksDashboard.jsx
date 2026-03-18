@@ -6,7 +6,7 @@ import TaxSimulator from './TaxSimulator';
 import LiquidationTable from './LiquidationTable';
 import TradeBubbleChart from './TradeBubbleChart';
 import { processPortfolioData } from '../utils/dataProcessor';
-import { fetchStockData } from '../utils/api';
+import { fetchStockDataSequential } from '../utils/api';
 import { calculateXIRR, getTaxRates, calculateLotTax, calculateTotalTax } from '../utils/calculations';
 
 const StocksDashboard = () => {
@@ -73,13 +73,7 @@ const StocksDashboard = () => {
         if (symbols.length === 0) return;
 
         const fetchAll = async () => {
-            const newPrices = {};
-            await Promise.all(symbols.map(async (symbol) => {
-                if (!prices[symbol]) {
-                    const data = await fetchStockData(symbol);
-                    if (data) newPrices[symbol] = data;
-                }
-            }));
+            const newPrices = await fetchStockDataSequential(symbols, prices);
             if (Object.keys(newPrices).length > 0) {
                 setPrices(prev => ({ ...prev, ...newPrices }));
             }
