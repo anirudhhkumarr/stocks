@@ -5,6 +5,7 @@ import { viteSingleFile } from 'vite-plugin-singlefile'
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react(), viteSingleFile()],
+    base: '/stocks/',
     server: {
         proxy: {
             '/api/yahoo': {
@@ -13,6 +14,10 @@ export default defineConfig({
                 rewrite: (path) => path.replace(/^\/api\/yahoo/, ''),
             },
         },
+    },
+    preview: {
+        port: 4173,
+        strictPort: true,
     },
     build: {
         target: 'esnext',

@@ -156,7 +156,6 @@ const StocksDashboard = () => {
             });
         });
         setTaxSimData(points);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [lotsCount, totalValue, w2Income, activeLots]);
 
     // Combined Stats
