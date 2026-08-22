@@ -5,6 +5,7 @@ import PortfolioChart from './PortfolioChart';
 import TaxSimulator from './TaxSimulator';
 import LiquidationTable from './LiquidationTable';
 import TradeBubbleChart from './TradeBubbleChart';
+import PortfolioRebalancer from './PortfolioRebalancer';
 import { processPortfolioData } from '../utils/dataProcessor';
 import { fetchStockDataSequential } from '../utils/api';
 import { calculateXIRR, getTaxRates, calculateLotTax, calculateTotalTax } from '../utils/calculations';
@@ -291,6 +292,13 @@ const StocksDashboard = () => {
             </div>
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />
+
+            <PortfolioRebalancer
+                activeLots={activeLots}
+                prices={prices}
+                w2Income={w2Income}
+                totalValue={totalValue}
+            />
         </div>
     );
 };
