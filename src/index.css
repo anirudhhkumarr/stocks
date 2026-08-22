@@ -749,6 +749,17 @@ body {
     border: 1px solid rgba(16, 185, 129, 0.25);
 }
 
+.rebalance-slider.cash-slider::-webkit-slider-thumb {
+    background: #14b8a6;
+    box-shadow: 0 0 8px rgba(20, 184, 166, 0.6);
+}
+
+.rebalance-tag.cash {
+    background: rgba(20, 184, 166, 0.15);
+    color: #14b8a6;
+    border: 1px solid rgba(20, 184, 166, 0.3);
+}
+
 .rebalance-tag.balanced {
     background: rgba(156, 163, 175, 0.12);
     color: #9ca3af;

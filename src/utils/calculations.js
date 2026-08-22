@@ -239,9 +239,19 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
     if (!activeLots || activeLots.length === 0) {
         return {
             stockAllocations: [],
+            cashAllocation: {
+                symbol: 'CASH',
+                currentValue: 0,
+                currentPct: 0,
+                targetPct: 0,
+                targetValue: 0,
+                postValue: 0,
+                postPct: 0
+            },
             lotsToSell: [],
             stocksToBuy: [],
             totalSellProceeds: 0,
+            targetCashReserve: 0,
             netCashToDeploy: 0,
             totalBuyAmount: 0,
             totalEstTax: 0,
@@ -274,7 +284,7 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
     const totalPortfolioValue = Object.values(symbolTotals).reduce((sum, s) => sum + s.currentValue, 0);
     const symbols = Object.keys(symbolTotals).sort();
 
-    // 2. Iteratively solve for tax liability and target allocations accounting for tax paid from proceeds
+    // 2. Iteratively solve for tax liability and target allocations accounting for tax paid from proceeds and cash reserve
     let estTax = 0;
     let iterations = 0;
     let finalResult = null;
@@ -311,6 +321,10 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
                 latestPrice
             };
         });
+
+        // Cash allocation
+        const targetCashPct = targetAllocations && targetAllocations['CASH'] !== undefined ? targetAllocations['CASH'] : 0;
+        const targetCashVal = (targetCashPct / 100) * effectivePortfolioValue;
 
         // Tax-efficient lot selection for overweight symbols
         const lotsToSell = [];
@@ -392,8 +406,10 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
             }
         });
 
-        // Net cash deployed into buys equals gross sells minus estimated taxes
-        const netCashToDeploy = Math.max(0, totalSellProceeds - iterationTax);
+        // Net proceeds after tax = totalSellProceeds - iterationTax
+        // Target cash reserve is retained in cash, remainder is deployed into stock buys
+        const netProceeds = Math.max(0, totalSellProceeds - iterationTax);
+        const netCashToDeploy = Math.max(0, netProceeds - targetCashVal);
 
         const stocksToBuy = [];
         let totalBuyAmount = 0;
@@ -436,13 +452,24 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
             };
         });
 
-        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0;
+        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 0.01;
 
         finalResult = {
             stockAllocations: postRebalanceAllocations,
+            cashAllocation: {
+                symbol: 'CASH',
+                name: 'Cash (USD)',
+                currentValue: 0,
+                currentPct: 0,
+                targetPct: targetCashPct,
+                targetValue: targetCashVal,
+                postValue: targetCashVal,
+                postPct: targetCashPct
+            },
             lotsToSell,
             stocksToBuy,
             totalSellProceeds,
+            targetCashReserve: targetCashVal,
             netCashToDeploy,
             totalBuyAmount,
             totalEstTax: iterationTax,
@@ -458,4 +485,5 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
 
     return finalResult;
 }
+
 

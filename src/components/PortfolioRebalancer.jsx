@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, ArrowRightLeft, TrendingDown, TrendingUp, CheckCircle, AlertTriangle, Scale } from 'lucide-react';
+import { RefreshCw, ArrowRightLeft, TrendingDown, TrendingUp, CheckCircle, AlertTriangle, Scale, DollarSign, Wallet } from 'lucide-react';
 import { formatCurrency, formatPercent, calculateRebalancePlan } from '../utils/calculations';
 
 const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
@@ -26,7 +26,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         return result;
     }, [activeLots, symbols, totalValue]);
 
-    // Target allocations state
+    // Target allocations state (includes stock symbols and 'CASH')
     const [targetAllocations, setTargetAllocations] = useState(() => {
         try {
             const saved = localStorage.getItem('portfolio_target_allocations');
@@ -48,6 +48,10 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                     hasMissing = true;
                 }
             });
+            if (updated['CASH'] === undefined || isNaN(updated['CASH'])) {
+                updated['CASH'] = 0;
+                hasMissing = true;
+            }
             if (hasMissing) {
                 localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
                 return updated;
@@ -66,7 +70,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
 
     // Preset: Reset to current
     const handleResetToCurrent = () => {
-        const updated = {};
+        const updated = { CASH: 0 };
         symbols.forEach(s => {
             updated[s] = parseFloat((currentAllocation[s] || 0).toFixed(2));
         });
@@ -74,13 +78,12 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
     };
 
-    // Preset: Equal weight
+    // Preset: Equal weight across stocks (0% cash)
     const handleEqualWeight = () => {
         if (symbols.length === 0) return;
         const equalPct = parseFloat((100 / symbols.length).toFixed(2));
-        const updated = {};
+        const updated = { CASH: 0 };
         symbols.forEach((s, idx) => {
-            // Adjust last symbol so total is exactly 100
             if (idx === symbols.length - 1) {
                 const sumPrev = equalPct * (symbols.length - 1);
                 updated[s] = parseFloat((100 - sumPrev).toFixed(2));
@@ -92,18 +95,19 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
     };
 
-    // Preset: Normalize to 100%
+    // Preset: Normalize all targets (including Cash) to 100%
     const handleNormalize = () => {
-        const sum = symbols.reduce((acc, s) => acc + (parseFloat(targetAllocations[s]) || 0), 0);
+        const allKeys = [...symbols, 'CASH'];
+        const sum = allKeys.reduce((acc, k) => acc + (parseFloat(targetAllocations[k]) || 0), 0);
         if (sum <= 0) return;
         const updated = {};
         let runningSum = 0;
-        symbols.forEach((s, idx) => {
-            if (idx === symbols.length - 1) {
-                updated[s] = parseFloat((100 - runningSum).toFixed(2));
+        allKeys.forEach((k, idx) => {
+            if (idx === allKeys.length - 1) {
+                updated[k] = parseFloat((100 - runningSum).toFixed(2));
             } else {
-                const normVal = parseFloat((((parseFloat(targetAllocations[s]) || 0) / sum) * 100).toFixed(2));
-                updated[s] = normVal;
+                const normVal = parseFloat((((parseFloat(targetAllocations[k]) || 0) / sum) * 100).toFixed(2));
+                updated[k] = normVal;
                 runningSum += normVal;
             }
         });
@@ -111,8 +115,8 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
     };
 
-    // Total target sum
-    const totalTargetPct = symbols.reduce((acc, s) => acc + (parseFloat(targetAllocations[s]) || 0), 0);
+    // Total target sum (stocks + CASH)
+    const totalTargetPct = symbols.reduce((acc, s) => acc + (parseFloat(targetAllocations[s]) || 0), 0) + (parseFloat(targetAllocations['CASH']) || 0);
     const isSumValid = Math.abs(totalTargetPct - 100) < 0.05;
 
     // Calculate rebalance plan
@@ -126,15 +130,19 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
 
     const {
         stockAllocations,
+        cashAllocation,
         lotsToSell,
         stocksToBuy,
         totalSellProceeds,
+        targetCashReserve,
         netCashToDeploy,
         totalBuyAmount,
         totalEstTax,
         totalRealizedGain,
         effectivePortfolioValue
     } = rebalancePlan;
+
+    const targetCashVal = parseFloat(targetAllocations['CASH']) || 0;
 
     return (
         <section className="portfolio-rebalancer" style={{ marginTop: '2.5rem' }}>
@@ -152,7 +160,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                             </span>
                         </div>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginTop: '4px' }}>
-                            Set your target asset allocation percentages below. The engine identifies the most tax-optimal individual lots to liquidate to generate proceeds for buying underweight assets.
+                            Set your target asset & cash allocations. The engine identifies optimal lots to liquidate, pays taxes from proceeds, retains target cash reserves, and deploys the rest into underweight assets.
                         </p>
                     </div>
 
@@ -160,7 +168,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                         <button
                             className="rebalance-btn-secondary"
                             onClick={handleResetToCurrent}
-                            title="Reset all targets to current allocation"
+                            title="Reset all targets to current allocation (0% cash)"
                         >
                             <RefreshCw size={14} />
                             <span>Reset to Current</span>
@@ -168,7 +176,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                         <button
                             className="rebalance-btn-secondary"
                             onClick={handleEqualWeight}
-                            title="Equal weight across all owned assets"
+                            title="Equal weight across all owned stocks"
                         >
                             <ArrowRightLeft size={14} />
                             <span>Equal Weight</span>
@@ -187,7 +195,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             {/* Target Allocations Grid & Controls */}
             <div className="card allocation-settings-card" style={{ padding: '1.5rem 2rem', marginBottom: '1.5rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '10px' }}>
-                    <h3 style={{ fontSize: '1.1rem', fontWeight: '600' }}>Target Allocations</h3>
+                    <h3 style={{ fontSize: '1.1rem', fontWeight: '600' }}>Target Allocations (Stocks & Cash)</h3>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                         <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Target Sum:</span>
                         <span className={`target-sum-badge ${isSumValid ? 'valid' : 'invalid'}`}>
@@ -210,16 +218,17 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                     <table className="data-table rebalance-input-table">
                         <thead>
                             <tr>
-                                <th>Symbol</th>
+                                <th>Asset</th>
                                 <th>Current Value</th>
                                 <th>Current %</th>
                                 <th style={{ minWidth: '220px' }}>Target Allocation %</th>
                                 <th>Target Value</th>
-                                <th>Rebalance Delta</th>
+                                <th>Rebalance Action</th>
                                 <th>Post-Rebalance %</th>
                             </tr>
                         </thead>
                         <tbody>
+                            {/* Stock Rows */}
                             {stockAllocations.map(stock => {
                                 const isOverweight = stock.diffValue < -0.01;
                                 const isUnderweight = stock.diffValue > 0.01;
@@ -294,6 +303,67 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                                     </tr>
                                 );
                             })}
+
+                            {/* Cash Allocation Row */}
+                            <tr style={{ background: 'rgba(20, 184, 166, 0.04)', borderTop: '2px solid rgba(20, 184, 166, 0.2)' }}>
+                                <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                        <Wallet size={16} style={{ color: '#14b8a6' }} />
+                                        <strong style={{ fontSize: '1.05rem', color: '#14b8a6' }}>CASH (USD)</strong>
+                                    </div>
+                                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                                        Liquidity Reserve
+                                    </div>
+                                </td>
+                                <td>$0</td>
+                                <td>
+                                    <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>0.00%</span>
+                                </td>
+                                <td>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="100"
+                                            step="0.5"
+                                            value={targetCashVal}
+                                            onChange={(e) => updateTarget('CASH', parseFloat(e.target.value))}
+                                            className="rebalance-slider cash-slider"
+                                            style={{ flex: 1 }}
+                                        />
+                                        <div style={{ position: 'relative', width: '85px' }}>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="100"
+                                                step="0.1"
+                                                value={targetCashVal}
+                                                onChange={(e) => updateTarget('CASH', parseFloat(e.target.value))}
+                                                className="rebalance-num-input"
+                                            />
+                                            <span style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', color: '#9ca3af', fontSize: '12px' }}>%</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td><strong style={{ color: '#14b8a6' }}>{formatCurrency(targetCashReserve || 0)}</strong></td>
+                                <td>
+                                    {targetCashReserve > 0 ? (
+                                        <span className="rebalance-tag cash">
+                                            <DollarSign size={13} />
+                                            Hold {formatCurrency(targetCashReserve)}
+                                        </span>
+                                    ) : (
+                                        <span className="rebalance-tag balanced">
+                                            0% Cash
+                                        </span>
+                                    )}
+                                </td>
+                                <td>
+                                    <strong style={{ color: '#14b8a6' }}>
+                                        {formatPercent(cashAllocation?.postPct || targetCashVal)}
+                                    </strong>
+                                </td>
+                            </tr>
                         </tbody>
                     </table>
                 </div>
@@ -350,6 +420,39 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                             </div>
                         );
                     })}
+
+                    {/* Cash Visual Bar */}
+                    {targetCashVal > 0 && (
+                        <div style={{ display: 'grid', gridTemplateColumns: '80px 1fr', alignItems: 'center', gap: '15px', paddingTop: '6px', borderTop: '1px dashed rgba(255,255,255,0.1)' }}>
+                            <div style={{ fontWeight: '600', fontSize: '0.95rem', color: '#14b8a6' }}>CASH</div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '11px', color: '#9ca3af', width: '55px' }}>Current</span>
+                                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '14px', overflow: 'hidden' }}>
+                                        <div style={{ width: '0%', height: '100%' }} />
+                                    </div>
+                                    <span style={{ fontSize: '12px', width: '50px', textAlign: 'right', fontWeight: '600', color: '#9ca3af' }}>0.00%</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <span style={{ fontSize: '11px', color: '#14b8a6', width: '55px' }}>Target</span>
+                                    <div style={{ flex: 1, background: 'rgba(255,255,255,0.06)', borderRadius: '4px', height: '14px', overflow: 'hidden' }}>
+                                        <div
+                                            style={{
+                                                width: `${Math.min(100, Math.max(0, targetCashVal))}%`,
+                                                background: '#14b8a6',
+                                                height: '100%',
+                                                borderRadius: '4px',
+                                                transition: 'width 0.3s ease'
+                                            }}
+                                        />
+                                    </div>
+                                    <span style={{ fontSize: '12px', width: '50px', textAlign: 'right', fontWeight: '600', color: '#14b8a6' }}>
+                                        {formatPercent(targetCashVal)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -372,6 +475,16 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                     </div>
                     <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '4px' }}>
                         Tax drag: {totalSellProceeds > 0 ? formatPercent((totalEstTax / totalSellProceeds) * 100) : '0.00%'}
+                    </div>
+                </div>
+
+                <div className="stat-card">
+                    <div className="card-title">Cash Reserve (Held)</div>
+                    <div className="primary-value" style={{ color: targetCashReserve > 0 ? '#14b8a6' : '#9ca3af' }}>
+                        {formatCurrency(targetCashReserve || 0)}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#9ca3af', marginTop: '4px' }}>
+                        {targetCashVal > 0 ? `${formatPercent(targetCashVal)} target allocation` : '0% cash target'}
                     </div>
                 </div>
 
@@ -488,13 +601,13 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                 )}
             </div>
 
-            {/* Execution Plan: Stocks to Buy */}
+            {/* Execution Plan: Stocks to Buy & Cash Retained */}
             <div className="card table-card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h3 style={{ fontSize: '1.15rem' }}>Step 2: Stocks to Buy (Deploy Proceeds)</h3>
+                        <h3 style={{ fontSize: '1.15rem' }}>Step 2: Deploy Proceeds & Retain Cash</h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>
-                            Reinvest liquidation proceeds into underweight assets to hit your exact target allocations.
+                            Reinvest liquidation proceeds into underweight assets and retain your desired cash balance.
                         </p>
                     </div>
                     {stocksToBuy.length > 0 && (
@@ -504,10 +617,24 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                     )}
                 </div>
 
+                {targetCashReserve > 0 && (
+                    <div style={{ margin: '1rem 1.5rem', padding: '1rem 1.25rem', background: 'rgba(20, 184, 166, 0.08)', border: '1px solid rgba(20, 184, 166, 0.25)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <Wallet size={24} style={{ color: '#14b8a6', flexShrink: 0 }} />
+                        <div>
+                            <div style={{ color: '#14b8a6', fontWeight: '600', fontSize: '0.95rem' }}>
+                                Cash Reserve Allocation: Retain {formatCurrency(targetCashReserve)} in Cash
+                            </div>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                                {formatPercent(targetCashVal)} of post-tax portfolio is preserved as uninvested cash liquidity from liquidation proceeds.
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 {stocksToBuy.length === 0 ? (
                     <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
                         <CheckCircle size={32} style={{ color: '#10b981', margin: '0 auto 10px', display: 'block' }} />
-                        <p style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '600' }}>No purchases required.</p>
+                        <p style={{ fontSize: '1rem', color: 'var(--text-primary)', fontWeight: '600' }}>No stock purchases required.</p>
                         <p style={{ fontSize: '0.85rem', marginTop: '4px' }}>No underweight assets detected.</p>
                     </div>
                 ) : (
@@ -538,7 +665,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                             </tbody>
                             <tfoot>
                                 <tr>
-                                    <td colSpan="2"><strong>Total Purchases</strong></td>
+                                    <td colSpan="2"><strong>Total Stock Purchases</strong></td>
                                     <td style={{ color: '#10b981' }}><strong>{formatCurrency(totalBuyAmount)}</strong></td>
                                     <td></td>
                                 </tr>
