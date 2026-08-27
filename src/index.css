@@ -683,6 +683,40 @@ body {
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
+.rebalance-lock-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #9ca3af;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    flex-shrink: 0;
+}
+
+.rebalance-lock-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--text-primary);
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+.rebalance-lock-btn.locked {
+    background: rgba(245, 158, 11, 0.18);
+    border-color: rgba(245, 158, 11, 0.5);
+    color: #fbbf24;
+    box-shadow: 0 0 8px rgba(245, 158, 11, 0.25);
+}
+
+.rebalance-lock-btn.locked:hover {
+    background: rgba(245, 158, 11, 0.28);
+    border-color: rgba(245, 158, 11, 0.7);
+}
+
 .rebalance-slider {
     -webkit-appearance: none;
     appearance: none;

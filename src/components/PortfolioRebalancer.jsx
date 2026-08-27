@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { RefreshCw, ArrowRightLeft, TrendingDown, TrendingUp, CheckCircle, AlertTriangle, Scale, DollarSign, Wallet } from 'lucide-react';
+import { RefreshCw, ArrowRightLeft, TrendingDown, TrendingUp, CheckCircle, AlertTriangle, Scale, DollarSign, Wallet, Lock, Unlock } from 'lucide-react';
 import { formatCurrency, formatPercent, calculateRebalancePlan } from '../utils/calculations';
 
 const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
@@ -36,10 +36,40 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         }
     });
 
-    // Initialize targets when symbols or current allocations load if empty
+    // Track locked/pinned sliders for normalization
+    const [lockedSymbols, setLockedSymbols] = useState(() => {
+        try {
+            const saved = localStorage.getItem('portfolio_target_locked');
+            return saved ? JSON.parse(saved) : {};
+        } catch {
+            return {};
+        }
+    });
+
+    const toggleLock = (symbol) => {
+        setLockedSymbols(prev => {
+            const updated = { ...prev, [symbol]: !prev[symbol] };
+            localStorage.setItem('portfolio_target_locked', JSON.stringify(updated));
+            return updated;
+        });
+    };
+
+    // Initialize targets when symbols or current allocations load (default to current allocations)
     useEffect(() => {
-        if (symbols.length === 0) return;
+        if (symbols.length === 0 || totalValue <= 0) return;
         setTargetAllocations(prev => {
+            const keys = Object.keys(prev);
+            const isUninitialized = keys.length === 0 || keys.every(k => !prev[k] || prev[k] === 0);
+
+            if (isUninitialized) {
+                const initial = { CASH: 0 };
+                symbols.forEach(s => {
+                    initial[s] = parseFloat((currentAllocation[s] || 0).toFixed(2));
+                });
+                localStorage.setItem('portfolio_target_allocations', JSON.stringify(initial));
+                return initial;
+            }
+
             const updated = { ...prev };
             let hasMissing = false;
             symbols.forEach(s => {
@@ -58,7 +88,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             }
             return prev;
         });
-    }, [symbols, currentAllocation]);
+    }, [symbols, currentAllocation, totalValue]);
 
     // Save target allocations to localStorage
     const updateTarget = (symbol, val) => {
@@ -95,22 +125,49 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
     };
 
-    // Preset: Normalize all targets (including Cash) to 100%
+    // Preset: Normalize targets to 100% respecting locked/pinned values
     const handleNormalize = () => {
         const allKeys = [...symbols, 'CASH'];
-        const sum = allKeys.reduce((acc, k) => acc + (parseFloat(targetAllocations[k]) || 0), 0);
-        if (sum <= 0) return;
-        const updated = {};
-        let runningSum = 0;
-        allKeys.forEach((k, idx) => {
-            if (idx === allKeys.length - 1) {
-                updated[k] = parseFloat((100 - runningSum).toFixed(2));
-            } else {
-                const normVal = parseFloat((((parseFloat(targetAllocations[k]) || 0) / sum) * 100).toFixed(2));
-                updated[k] = normVal;
-                runningSum += normVal;
-            }
-        });
+        const lockedKeys = allKeys.filter(k => lockedSymbols[k]);
+        const unlockedKeys = allKeys.filter(k => !lockedSymbols[k]);
+
+        // If all are locked, nothing can adjust
+        if (unlockedKeys.length === 0) return;
+
+        const lockedSum = lockedKeys.reduce((acc, k) => acc + (parseFloat(targetAllocations[k]) || 0), 0);
+        const targetRemaining = Math.max(0, 100 - lockedSum);
+        const unlockedCurrentSum = unlockedKeys.reduce((acc, k) => acc + (parseFloat(targetAllocations[k]) || 0), 0);
+
+        const updated = { ...targetAllocations };
+
+        if (unlockedCurrentSum <= 0) {
+            // Distribute remaining equally among unlocked
+            const equalShare = parseFloat((targetRemaining / unlockedKeys.length).toFixed(2));
+            let runningShare = 0;
+            unlockedKeys.forEach((k, idx) => {
+                if (idx === unlockedKeys.length - 1) {
+                    updated[k] = parseFloat((targetRemaining - runningShare).toFixed(2));
+                } else {
+                    updated[k] = equalShare;
+                    runningShare += equalShare;
+                }
+            });
+        } else {
+            // Distribute targetRemaining proportionally to unlocked items
+            let runningSum = 0;
+            unlockedKeys.forEach((k, idx) => {
+                if (idx === unlockedKeys.length - 1) {
+                    const finalVal = parseFloat((targetRemaining - runningSum).toFixed(2));
+                    updated[k] = Math.max(0, finalVal);
+                } else {
+                    const currentVal = parseFloat(targetAllocations[k]) || 0;
+                    const normVal = parseFloat(((currentVal / unlockedCurrentSum) * targetRemaining).toFixed(2));
+                    updated[k] = normVal;
+                    runningSum += normVal;
+                }
+            });
+        }
+
         setTargetAllocations(updated);
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
     };
@@ -250,7 +307,16 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                                             <span style={{ fontWeight: '600' }}>{formatPercent(stock.currentPct)}</span>
                                         </td>
                                         <td>
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                                <button
+                                                    type="button"
+                                                    className={`rebalance-lock-btn ${lockedSymbols[stock.symbol] ? 'locked' : ''}`}
+                                                    onClick={() => toggleLock(stock.symbol)}
+                                                    title={lockedSymbols[stock.symbol] ? "Locked - value pinned during normalization" : "Unlocked - click to pin value during normalization"}
+                                                    aria-label={lockedSymbols[stock.symbol] ? `Unlock ${stock.symbol}` : `Lock ${stock.symbol}`}
+                                                >
+                                                    {lockedSymbols[stock.symbol] ? <Lock size={13} /> : <Unlock size={13} />}
+                                                </button>
                                                 <input
                                                     type="range"
                                                     min="0"
@@ -261,7 +327,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                                                     className="rebalance-slider"
                                                     style={{ flex: 1 }}
                                                 />
-                                                <div style={{ position: 'relative', width: '85px' }}>
+                                                <div style={{ position: 'relative', width: '85px', flexShrink: 0 }}>
                                                     <input
                                                         type="number"
                                                         min="0"
@@ -320,7 +386,16 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                                     <span style={{ fontWeight: '600', color: 'var(--text-secondary)' }}>0.00%</span>
                                 </td>
                                 <td>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                        <button
+                                            type="button"
+                                            className={`rebalance-lock-btn ${lockedSymbols['CASH'] ? 'locked' : ''}`}
+                                            onClick={() => toggleLock('CASH')}
+                                            title={lockedSymbols['CASH'] ? "Locked - cash target pinned during normalization" : "Unlocked - click to pin cash target during normalization"}
+                                            aria-label={lockedSymbols['CASH'] ? "Unlock CASH" : "Lock CASH"}
+                                        >
+                                            {lockedSymbols['CASH'] ? <Lock size={13} /> : <Unlock size={13} />}
+                                        </button>
                                         <input
                                             type="range"
                                             min="0"
@@ -331,7 +406,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
                                             className="rebalance-slider cash-slider"
                                             style={{ flex: 1 }}
                                         />
-                                        <div style={{ position: 'relative', width: '85px' }}>
+                                        <div style={{ position: 'relative', width: '85px', flexShrink: 0 }}>
                                             <input
                                                 type="number"
                                                 min="0"
