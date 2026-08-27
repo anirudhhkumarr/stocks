@@ -295,227 +295,214 @@ export function calculateRebalancePlan(
     // Check if target cash is set
     const targetCashPct = targetAllocations && targetAllocations['CASH'] !== undefined ? targetAllocations['CASH'] : 0;
     const isCashDollarLocked = lockedModes && lockedModes['CASH'] === 'dollar';
-    const targetCashValFromLock = isCashDollarLocked && lockedDollarAmounts && lockedDollarAmounts['CASH'] !== undefined
+    const targetCashReserve = isCashDollarLocked && lockedDollarAmounts && lockedDollarAmounts['CASH'] !== undefined
         ? lockedDollarAmounts['CASH']
-        : null;
+        : (targetCashPct / 100) * totalPortfolioValue;
 
-    // 2. Iteratively solve for tax liability and target allocations accounting for tax paid from proceeds and cash reserve
-    let estTax = 0;
-    let iterations = 0;
-    let finalResult = null;
+    // 2. Compute Target & Difference for each stock against total portfolio value
+    const stockAllocations = symbols.map(symbol => {
+        const currentVal = symbolTotals[symbol].currentValue;
+        const currentPct = totalPortfolioValue > 0 ? (currentVal / totalPortfolioValue) * 100 : 0;
+        const isDollarLocked = lockedModes && lockedModes[symbol] === 'dollar';
+        const isPctLocked = lockedModes && lockedModes[symbol] === 'percent';
 
-    while (iterations < 10) {
-        iterations++;
-        const effectivePortfolioValue = Math.max(0, totalPortfolioValue - estTax);
+        let targetVal;
+        let targetPct;
 
-        const stockAllocations = symbols.map(symbol => {
-            const currentVal = symbolTotals[symbol].currentValue;
-            const currentPct = totalPortfolioValue > 0 ? (currentVal / totalPortfolioValue) * 100 : 0;
-            const isDollarLocked = lockedModes && lockedModes[symbol] === 'dollar';
-            const isPctLocked = lockedModes && lockedModes[symbol] === 'percent';
+        if (isDollarLocked && lockedDollarAmounts && lockedDollarAmounts[symbol] !== undefined) {
+            targetVal = lockedDollarAmounts[symbol];
+            targetPct = totalPortfolioValue > 0 ? (targetVal / totalPortfolioValue) * 100 : currentPct;
+        } else {
+            targetPct = targetAllocations && targetAllocations[symbol] !== undefined
+                ? targetAllocations[symbol]
+                : currentPct;
+            targetVal = (targetPct / 100) * totalPortfolioValue;
+        }
 
-            let targetVal;
-            let targetPct;
+        const diffVal = targetVal - currentVal; // negative = sell (overweight), positive = buy (underweight)
 
-            if (isDollarLocked && lockedDollarAmounts && lockedDollarAmounts[symbol] !== undefined) {
-                // Fixed dollar target: exact dollar amount is preserved
-                targetVal = lockedDollarAmounts[symbol];
-                targetPct = effectivePortfolioValue > 0 ? (targetVal / effectivePortfolioValue) * 100 : currentPct;
-            } else {
-                targetPct = targetAllocations && targetAllocations[symbol] !== undefined
-                    ? targetAllocations[symbol]
-                    : currentPct;
-                targetVal = (targetPct / 100) * effectivePortfolioValue;
-            }
+        const history = prices[symbol];
+        let latestPrice = 0;
+        if (history) {
+            const dates = Object.keys(history).sort();
+            latestPrice = history[dates[dates.length - 1]] || 0;
+        }
 
-            let diffVal = targetVal - currentVal; // negative = sell (overweight), positive = buy (underweight)
-
-            const history = prices[symbol];
-            let latestPrice = 0;
-            if (history) {
-                const dates = Object.keys(history).sort();
-                latestPrice = history[dates[dates.length - 1]] || 0;
-            }
-
-            return {
-                symbol,
-                currentValue: currentVal,
-                currentPct,
-                targetPct,
-                targetValue: targetVal,
-                diffValue: diffVal,
-                currentQty: symbolTotals[symbol].qty,
-                costBasis: symbolTotals[symbol].costBasis,
-                latestPrice,
-                isDollarLocked,
-                isPctLocked
-            };
-        });
-
-        // Cash allocation
-        const targetCashVal = targetCashValFromLock !== null
-            ? targetCashValFromLock
-            : (targetCashPct / 100) * effectivePortfolioValue;
-
-        // Tax-efficient lot selection for overweight symbols
-        const lotsToSell = [];
-        let totalSellProceeds = 0;
-        let iterationTax = 0;
-        let totalRealizedGain = 0;
-
-        symbols.forEach(symbol => {
-            const alloc = stockAllocations.find(a => a.symbol === symbol);
-            // Ignore if balanced or not overweight beyond cent rounding
-            if (!alloc || alloc.diffValue >= -0.01) return;
-
-            let neededLiquidation = Math.abs(alloc.diffValue);
-
-            // Sort lots of this symbol by tax efficiency (lowest tax / marketValue)
-            const symbolLots = symbolTotals[symbol].lots.map(lot => {
-                const isLongTerm = lot.holdingPeriod === 'Long Term';
-                const tax = calculateLotTax(lot.gainLoss, isLongTerm, rates);
-                const efficiency = lot.marketValue > 0 ? (tax / lot.marketValue) : 0;
-                return {
-                    ...lot,
-                    estTax: tax,
-                    efficiency,
-                    isLongTerm
-                };
-            }).sort((a, b) => a.efficiency - b.efficiency);
-
-            for (const lot of symbolLots) {
-                if (neededLiquidation <= 0.005) break;
-
-                const isLongTerm = lot.isLongTerm;
-                if (lot.marketValue <= neededLiquidation + 0.005) {
-                    // Sell full lot
-                    lotsToSell.push({
-                        symbol: lot.symbol,
-                        openDate: lot.openDate,
-                        totalQty: lot.qty,
-                        sellQty: lot.qty,
-                        isPartial: false,
-                        marketValue: lot.marketValue,
-                        costBasis: lot.costBasis,
-                        gainLoss: lot.gainLoss,
-                        holdingPeriod: lot.holdingPeriod,
-                        efficiency: lot.efficiency,
-                        estTax: lot.estTax
-                    });
-                    totalSellProceeds += lot.marketValue;
-                    iterationTax += lot.estTax;
-                    totalRealizedGain += lot.gainLoss;
-                    neededLiquidation -= lot.marketValue;
-                } else {
-                    // Sell partial lot
-                    const fraction = neededLiquidation / lot.marketValue;
-                    const sellQty = lot.qty * fraction;
-                    const sellProceeds = neededLiquidation;
-                    const sellCost = lot.costBasis * fraction;
-                    const sellGain = sellProceeds - sellCost;
-                    const sellTax = calculateLotTax(sellGain, isLongTerm, rates);
-                    const sellEfficiency = sellProceeds > 0 ? (sellTax / sellProceeds) : 0;
-
-                    lotsToSell.push({
-                        symbol: lot.symbol,
-                        openDate: lot.openDate,
-                        totalQty: lot.qty,
-                        sellQty: sellQty,
-                        isPartial: true,
-                        marketValue: sellProceeds,
-                        costBasis: sellCost,
-                        gainLoss: sellGain,
-                        holdingPeriod: lot.holdingPeriod,
-                        efficiency: sellEfficiency,
-                        estTax: sellTax
-                    });
-
-                    totalSellProceeds += sellProceeds;
-                    iterationTax += sellTax;
-                    totalRealizedGain += sellGain;
-                    neededLiquidation = 0;
-                }
-            }
-        });
-
-        // Net proceeds after tax = totalSellProceeds - iterationTax
-        // Target cash reserve is retained in cash, remainder is deployed into stock buys
-        const netProceeds = Math.max(0, totalSellProceeds - iterationTax);
-        const netCashToDeploy = Math.max(0, netProceeds - targetCashVal);
-
-        const stocksToBuy = [];
-        let totalBuyAmount = 0;
-
-        stockAllocations.forEach(alloc => {
-            if (alloc.diffValue > 0.01) {
-                const buyAmount = alloc.diffValue;
-                const buyShares = alloc.latestPrice > 0 ? (buyAmount / alloc.latestPrice) : 0;
-                stocksToBuy.push({
-                    symbol: alloc.symbol,
-                    buyAmount,
-                    latestPrice: alloc.latestPrice,
-                    buyShares
-                });
-                totalBuyAmount += buyAmount;
-            }
-        });
-
-        // Projected post-rebalance allocations
-        const postRebalanceAllocations = stockAllocations.map(alloc => {
-            let postValue = alloc.currentValue;
-            if (alloc.diffValue < -0.01) {
-                const soldForSymbol = lotsToSell
-                    .filter(l => l.symbol === alloc.symbol)
-                    .reduce((sum, l) => sum + l.marketValue, 0);
-                postValue = Math.max(0, alloc.currentValue - soldForSymbol);
-            } else if (alloc.diffValue > 0.01) {
-                const boughtForSymbol = stocksToBuy
-                    .filter(b => b.symbol === alloc.symbol)
-                    .reduce((sum, b) => sum + b.buyAmount, 0);
-                postValue = alloc.currentValue + boughtForSymbol;
-            }
-
-            const postPct = effectivePortfolioValue > 0 ? (postValue / effectivePortfolioValue) * 100 : 0;
-
-            return {
-                ...alloc,
-                postValue,
-                postPct
-            };
-        });
-
-        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 0.01;
-
-        finalResult = {
-            stockAllocations: postRebalanceAllocations,
-            cashAllocation: {
-                symbol: 'CASH',
-                name: 'Cash (USD)',
-                currentValue: 0,
-                currentPct: 0,
-                targetPct: targetCashPct,
-                targetValue: targetCashVal,
-                postValue: targetCashVal,
-                postPct: targetCashPct
-            },
-            lotsToSell,
-            stocksToBuy,
-            totalSellProceeds,
-            targetCashReserve: targetCashVal,
-            netCashToDeploy,
-            totalBuyAmount,
-            totalEstTax: iterationTax,
-            totalRealizedGain,
-            totalPortfolioValue,
-            effectivePortfolioValue,
-            isBalanced
+        return {
+            symbol,
+            currentValue: currentVal,
+            currentPct,
+            targetPct,
+            targetValue: targetVal,
+            diffValue: diffVal,
+            currentQty: symbolTotals[symbol].qty,
+            costBasis: symbolTotals[symbol].costBasis,
+            latestPrice,
+            isDollarLocked,
+            isPctLocked
         };
+    });
 
-        if (Math.abs(iterationTax - estTax) < 0.01) break;
-        estTax = iterationTax;
-    }
+    // 3. Tax-efficient lot selection ONLY for overweight symbols (diffValue < -0.01)
+    const lotsToSell = [];
+    let totalSellProceeds = 0;
+    let totalEstTax = 0;
+    let totalRealizedGain = 0;
 
-    return finalResult;
+    symbols.forEach(symbol => {
+        const alloc = stockAllocations.find(a => a.symbol === symbol);
+        // Ignore if balanced or not overweight beyond cent rounding
+        if (!alloc || alloc.diffValue >= -0.01) return;
+
+        let neededLiquidation = Math.abs(alloc.diffValue);
+
+        // Sort lots of this symbol by tax efficiency (lowest tax / marketValue)
+        const symbolLots = symbolTotals[symbol].lots.map(lot => {
+            const isLongTerm = lot.holdingPeriod === 'Long Term';
+            const tax = calculateLotTax(lot.gainLoss, isLongTerm, rates);
+            const efficiency = lot.marketValue > 0 ? (tax / lot.marketValue) : 0;
+            return {
+                ...lot,
+                estTax: tax,
+                efficiency,
+                isLongTerm
+            };
+        }).sort((a, b) => a.efficiency - b.efficiency);
+
+        for (const lot of symbolLots) {
+            if (neededLiquidation <= 0.005) break;
+
+            const isLongTerm = lot.isLongTerm;
+            if (lot.marketValue <= neededLiquidation + 0.005) {
+                // Sell full lot
+                lotsToSell.push({
+                    symbol: lot.symbol,
+                    openDate: lot.openDate,
+                    totalQty: lot.qty,
+                    sellQty: lot.qty,
+                    isPartial: false,
+                    marketValue: lot.marketValue,
+                    costBasis: lot.costBasis,
+                    gainLoss: lot.gainLoss,
+                    holdingPeriod: lot.holdingPeriod,
+                    efficiency: lot.efficiency,
+                    estTax: lot.estTax
+                });
+                totalSellProceeds += lot.marketValue;
+                totalEstTax += lot.estTax;
+                totalRealizedGain += lot.gainLoss;
+                neededLiquidation -= lot.marketValue;
+            } else {
+                // Sell partial lot
+                const fraction = neededLiquidation / lot.marketValue;
+                const sellQty = lot.qty * fraction;
+                const sellProceeds = neededLiquidation;
+                const sellCost = lot.costBasis * fraction;
+                const sellGain = sellProceeds - sellCost;
+                const sellTax = calculateLotTax(sellGain, isLongTerm, rates);
+                const sellEfficiency = sellProceeds > 0 ? (sellTax / sellProceeds) : 0;
+
+                lotsToSell.push({
+                    symbol: lot.symbol,
+                    openDate: lot.openDate,
+                    totalQty: lot.qty,
+                    sellQty: sellQty,
+                    isPartial: true,
+                    marketValue: sellProceeds,
+                    costBasis: sellCost,
+                    gainLoss: sellGain,
+                    holdingPeriod: lot.holdingPeriod,
+                    efficiency: sellEfficiency,
+                    estTax: sellTax
+                });
+
+                totalSellProceeds += sellProceeds;
+                totalEstTax += sellTax;
+                totalRealizedGain += sellGain;
+                neededLiquidation = 0;
+            }
+        }
+    });
+
+    // 4. Net proceeds after tax = totalSellProceeds - totalEstTax
+    const netProceeds = Math.max(0, totalSellProceeds - totalEstTax);
+    const netCashToDeploy = Math.max(0, netProceeds - targetCashReserve);
+
+    // 5. Underweight symbols to buy with available net cash
+    const underweightAllocations = stockAllocations.filter(a => a.diffValue > 0.01);
+    const totalRequestedBuy = underweightAllocations.reduce((sum, a) => sum + a.diffValue, 0);
+
+    const stocksToBuy = [];
+    let totalBuyAmount = 0;
+
+    underweightAllocations.forEach(alloc => {
+        const buyAmount = totalRequestedBuy > 0
+            ? Math.min(alloc.diffValue, (alloc.diffValue / totalRequestedBuy) * netCashToDeploy)
+            : 0;
+        const buyShares = alloc.latestPrice > 0 ? (buyAmount / alloc.latestPrice) : 0;
+        if (buyAmount > 0.01) {
+            stocksToBuy.push({
+                symbol: alloc.symbol,
+                buyAmount,
+                latestPrice: alloc.latestPrice,
+                buyShares
+            });
+            totalBuyAmount += buyAmount;
+        }
+    });
+
+    // 6. Post-rebalance allocations & effective portfolio value
+    const effectivePortfolioValue = Math.max(0, totalPortfolioValue - totalEstTax);
+
+    const postRebalanceAllocations = stockAllocations.map(alloc => {
+        let postValue = alloc.currentValue;
+        if (alloc.diffValue < -0.01) {
+            const soldForSymbol = lotsToSell
+                .filter(l => l.symbol === alloc.symbol)
+                .reduce((sum, l) => sum + l.marketValue, 0);
+            postValue = Math.max(0, alloc.currentValue - soldForSymbol);
+        } else if (alloc.diffValue > 0.01) {
+            const boughtForSymbol = stocksToBuy
+                .filter(b => b.symbol === alloc.symbol)
+                .reduce((sum, b) => sum + b.buyAmount, 0);
+            postValue = alloc.currentValue + boughtForSymbol;
+        }
+
+        const postPct = effectivePortfolioValue > 0 ? (postValue / effectivePortfolioValue) * 100 : 0;
+
+        return {
+            ...alloc,
+            postValue,
+            postPct
+        };
+    });
+
+    const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashReserve < 0.01;
+
+    return {
+        stockAllocations: postRebalanceAllocations,
+        cashAllocation: {
+            symbol: 'CASH',
+            name: 'Cash (USD)',
+            currentValue: 0,
+            currentPct: 0,
+            targetPct: targetCashPct,
+            targetValue: targetCashReserve,
+            postValue: targetCashReserve,
+            postPct: effectivePortfolioValue > 0 ? (targetCashReserve / effectivePortfolioValue) * 100 : 0
+        },
+        lotsToSell,
+        stocksToBuy,
+        totalSellProceeds,
+        targetCashReserve,
+        netCashToDeploy,
+        totalBuyAmount,
+        totalEstTax,
+        totalRealizedGain,
+        totalPortfolioValue,
+        effectivePortfolioValue,
+        isBalanced
+    };
 }
 
 

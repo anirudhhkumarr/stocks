@@ -154,10 +154,45 @@ describe('calculations.js - Portfolio Rebalancing & Taxes with Seeded Random Por
 
                 expect(lockedSells).toHaveLength(0);
                 expect(lockedBuys).toHaveLength(0);
+            });
+        });
+    });
 
-                // Check that other overweight symbol DID generate sales
-                const otherSells = plan.lotsToSell.filter(l => l.symbol === otherSymbol);
-                expect(otherSells.length).toBeGreaterThan(0);
+    describe('Single Stock Reduction (Without Normalizing)', () => {
+        const seeds = [123, 456, 789];
+
+        seeds.forEach(seed => {
+            it(`should only generate sales for the reduced stock and NEVER for untouched stocks (seed: ${seed})`, () => {
+                const portfolio = generateRandomPortfolio(seed, { numSymbols: 4 });
+                const { activeLots, symbols, totalValue, prices } = portfolio;
+
+                const reducedSymbol = symbols[0];
+                const untouchedSymbols = symbols.slice(1);
+
+                // Start from exact current allocation
+                const targetAllocations = {};
+                symbols.forEach(s => {
+                    const symVal = activeLots.filter(l => l.symbol === s).reduce((sum, l) => sum + l.marketValue, 0);
+                    targetAllocations[s] = (symVal / totalValue) * 100;
+                });
+                targetAllocations['CASH'] = 0;
+
+                // Reduce only reducedSymbol by half (do not normalize, sum < 100%)
+                targetAllocations[reducedSymbol] = targetAllocations[reducedSymbol] / 2;
+
+                const plan = calculateRebalancePlan(activeLots, targetAllocations, prices, 250000);
+
+                // Reduced symbol must have sales
+                const reducedSells = plan.lotsToSell.filter(l => l.symbol === reducedSymbol);
+                expect(reducedSells.length).toBeGreaterThan(0);
+
+                // All untouched symbols must have ZERO sales and ZERO buys
+                untouchedSymbols.forEach(untouched => {
+                    const untouchedSells = plan.lotsToSell.filter(l => l.symbol === untouched);
+                    const untouchedBuys = plan.stocksToBuy.filter(b => b.symbol === untouched);
+                    expect(untouchedSells).toHaveLength(0);
+                    expect(untouchedBuys).toHaveLength(0);
+                });
             });
         });
     });
