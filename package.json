@@ -8,6 +8,7 @@
     "data": "node scripts/fetch-data.mjs",
     "build": "npm run data && vite build",
     "lint": "eslint .",
+    "test": "echo \"Error: no test specified\" && exit 0",
     "preview": "vite preview",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },

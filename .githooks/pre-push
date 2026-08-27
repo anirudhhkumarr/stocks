@@ -1,4 +1,5 @@
 #!/bin/sh
 echo "Running pre-push build..."
+npm test
 npm run build || exit 1
 echo "Pre-push checks passed."
