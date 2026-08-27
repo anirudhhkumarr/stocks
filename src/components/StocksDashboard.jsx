@@ -280,16 +280,18 @@ const StocksDashboard = () => {
                 />
             </div>
 
-            <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
-                <TradeBubbleChart
-                    lots={planLots}
-                    allLots={activeLots}
-                    prices={prices}
-                    range={range}
-                    isLogScale={isLogScale}
-                    isYearlyTicks={isYearlyTicks}
-                />
-            </div>
+            {planLots && planLots.length > 0 && (
+                <div className="charts-grid-full" style={{ marginTop: '2rem' }}>
+                    <TradeBubbleChart
+                        lots={planLots}
+                        allLots={activeLots}
+                        prices={prices}
+                        range={range}
+                        isLogScale={isLogScale}
+                        isYearlyTicks={isYearlyTicks}
+                    />
+                </div>
+            )}
 
             <LiquidationTable lots={planLots} targetAmount={targetAmount} />
 

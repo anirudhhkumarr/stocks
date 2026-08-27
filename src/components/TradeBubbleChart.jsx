@@ -306,6 +306,10 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
         return () => window.removeEventListener('resize', renderChart);
     }, [baseChartData, symbols, prices, selectedSymbols, range, isLogScale, lots]);
 
+    if (!lots || lots.length === 0) {
+        return null;
+    }
+
     const colorScale = d3.scaleOrdinal(d3.schemeTableau10).domain(symbols);
 
     return (
