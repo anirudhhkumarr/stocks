@@ -8,8 +8,7 @@
     "build": "npm run test && vite build",
     "lint": "eslint .",
     "clean": "rm -rf dist cloudflare/.wrangler",
-    "test": "vitest run",
-    "test:proxy": "node scripts/test-proxy.mjs",
+    "test": "vitest run && node scripts/test-proxy.mjs",
     "preview": "vite preview",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
