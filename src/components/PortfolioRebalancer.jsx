@@ -159,12 +159,14 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         symbols.forEach(s => {
             const pct = parseFloat((currentAllocation[s] || 0).toFixed(2));
             updated[s] = pct;
-            updatedDollars[s] = (pct / 100) * totalValue;
+            updatedDollars[s] = totalValue > 0 ? (pct / 100) * totalValue : 0;
         });
         setTargetAllocations(updated);
         setLockedDollarAmounts(updatedDollars);
+        setLockedModes({});
         localStorage.setItem('portfolio_target_allocations', JSON.stringify(updated));
         localStorage.setItem('portfolio_locked_dollars', JSON.stringify(updatedDollars));
+        localStorage.setItem('portfolio_target_locked_modes', JSON.stringify({}));
     };
 
     // Preset: Normalize targets to 100% respecting % and $ locked values
@@ -254,8 +256,8 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
 
     // Calculate rebalance plan
     const rebalancePlan = useMemo(() => {
-        return calculateRebalancePlan(activeLots, targetAllocations, prices, w2Income);
-    }, [activeLots, targetAllocations, prices, w2Income]);
+        return calculateRebalancePlan(activeLots, targetAllocations, prices, w2Income, lockedModes, lockedDollarAmounts);
+    }, [activeLots, targetAllocations, prices, w2Income, lockedModes, lockedDollarAmounts]);
 
     if (!activeLots || activeLots.length === 0 || symbols.length === 0) {
         return null;

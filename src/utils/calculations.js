@@ -235,12 +235,20 @@ export function calculateXIRR(lots, currentValue) {
     return (rate > -0.99 && rate < 10) ? rate : null;
 }
 
-export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2Income) {
+export function calculateRebalancePlan(
+    activeLots,
+    targetAllocations,
+    prices = {},
+    w2Income = 0,
+    lockedModes = {},
+    lockedDollarAmounts = {}
+) {
     if (!activeLots || activeLots.length === 0) {
         return {
             stockAllocations: [],
             cashAllocation: {
                 symbol: 'CASH',
+                name: 'Cash (USD)',
                 currentValue: 0,
                 currentPct: 0,
                 targetPct: 0,
@@ -284,6 +292,13 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
     const totalPortfolioValue = Object.values(symbolTotals).reduce((sum, s) => sum + s.currentValue, 0);
     const symbols = Object.keys(symbolTotals).sort();
 
+    // Check if target cash is set
+    const targetCashPct = targetAllocations && targetAllocations['CASH'] !== undefined ? targetAllocations['CASH'] : 0;
+    const isCashDollarLocked = lockedModes && lockedModes['CASH'] === 'dollar';
+    const targetCashValFromLock = isCashDollarLocked && lockedDollarAmounts && lockedDollarAmounts['CASH'] !== undefined
+        ? lockedDollarAmounts['CASH']
+        : null;
+
     // 2. Iteratively solve for tax liability and target allocations accounting for tax paid from proceeds and cash reserve
     let estTax = 0;
     let iterations = 0;
@@ -296,11 +311,31 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
         const stockAllocations = symbols.map(symbol => {
             const currentVal = symbolTotals[symbol].currentValue;
             const currentPct = totalPortfolioValue > 0 ? (currentVal / totalPortfolioValue) * 100 : 0;
-            const targetPct = targetAllocations && targetAllocations[symbol] !== undefined
-                ? targetAllocations[symbol]
-                : currentPct;
-            const targetVal = (targetPct / 100) * effectivePortfolioValue;
-            const diffVal = targetVal - currentVal; // negative = sell (overweight), positive = buy (underweight)
+            const isDollarLocked = lockedModes && lockedModes[symbol] === 'dollar';
+            const isPctLocked = lockedModes && lockedModes[symbol] === 'percent';
+
+            let targetVal;
+            let targetPct;
+
+            if (isDollarLocked && lockedDollarAmounts && lockedDollarAmounts[symbol] !== undefined) {
+                // Fixed dollar target: exact dollar amount is preserved
+                targetVal = lockedDollarAmounts[symbol];
+                targetPct = effectivePortfolioValue > 0 ? (targetVal / effectivePortfolioValue) * 100 : currentPct;
+            } else {
+                targetPct = targetAllocations && targetAllocations[symbol] !== undefined
+                    ? targetAllocations[symbol]
+                    : currentPct;
+                targetVal = (targetPct / 100) * effectivePortfolioValue;
+            }
+
+            let diffVal = targetVal - currentVal; // negative = sell (overweight), positive = buy (underweight)
+
+            // Tolerance check: if target is within 0.05% of current allocation or within $1.00 of currentVal, no rebalance action
+            const isNearCurrent = Math.abs(targetPct - currentPct) < 0.05 && targetCashPct === 0 && estTax === 0;
+            if (Math.abs(diffVal) < 1.0 || isNearCurrent) {
+                diffVal = 0;
+                targetVal = currentVal;
+            }
 
             const history = prices[symbol];
             let latestPrice = 0;
@@ -318,13 +353,20 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
                 diffValue: diffVal,
                 currentQty: symbolTotals[symbol].qty,
                 costBasis: symbolTotals[symbol].costBasis,
-                latestPrice
+                latestPrice,
+                isDollarLocked,
+                isPctLocked
             };
         });
 
         // Cash allocation
-        const targetCashPct = targetAllocations && targetAllocations['CASH'] !== undefined ? targetAllocations['CASH'] : 0;
-        const targetCashVal = (targetCashPct / 100) * effectivePortfolioValue;
+        let targetCashVal = targetCashValFromLock !== null
+            ? targetCashValFromLock
+            : (targetCashPct / 100) * effectivePortfolioValue;
+
+        if (Math.abs(targetCashVal) < 1.0) {
+            targetCashVal = 0;
+        }
 
         // Tax-efficient lot selection for overweight symbols
         const lotsToSell = [];
@@ -334,7 +376,8 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
 
         symbols.forEach(symbol => {
             const alloc = stockAllocations.find(a => a.symbol === symbol);
-            if (!alloc || alloc.diffValue >= -0.01) return;
+            // Ignore if balanced or not overweight by at least $1.00
+            if (!alloc || alloc.diffValue >= -1.0) return;
 
             let neededLiquidation = Math.abs(alloc.diffValue);
 
@@ -352,10 +395,10 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
             }).sort((a, b) => a.efficiency - b.efficiency);
 
             for (const lot of symbolLots) {
-                if (neededLiquidation <= 0.001) break;
+                if (neededLiquidation <= 0.5) break;
 
                 const isLongTerm = lot.isLongTerm;
-                if (lot.marketValue <= neededLiquidation + 0.01) {
+                if (lot.marketValue <= neededLiquidation + 0.5) {
                     // Sell full lot
                     lotsToSell.push({
                         symbol: lot.symbol,
@@ -415,7 +458,7 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
         let totalBuyAmount = 0;
 
         stockAllocations.forEach(alloc => {
-            if (alloc.diffValue > 0.01) {
+            if (alloc.diffValue > 1.0) {
                 const buyAmount = alloc.diffValue;
                 const buyShares = alloc.latestPrice > 0 ? (buyAmount / alloc.latestPrice) : 0;
                 stocksToBuy.push({
@@ -431,12 +474,12 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
         // Projected post-rebalance allocations
         const postRebalanceAllocations = stockAllocations.map(alloc => {
             let postValue = alloc.currentValue;
-            if (alloc.diffValue < -0.01) {
+            if (alloc.diffValue < -1.0) {
                 const soldForSymbol = lotsToSell
                     .filter(l => l.symbol === alloc.symbol)
                     .reduce((sum, l) => sum + l.marketValue, 0);
                 postValue = Math.max(0, alloc.currentValue - soldForSymbol);
-            } else if (alloc.diffValue > 0.01) {
+            } else if (alloc.diffValue > 1.0) {
                 const boughtForSymbol = stocksToBuy
                     .filter(b => b.symbol === alloc.symbol)
                     .reduce((sum, b) => sum + b.buyAmount, 0);
@@ -452,7 +495,7 @@ export function calculateRebalancePlan(activeLots, targetAllocations, prices, w2
             };
         });
 
-        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 0.01;
+        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 1.0;
 
         finalResult = {
             stockAllocations: postRebalanceAllocations,
