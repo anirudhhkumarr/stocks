@@ -641,9 +641,9 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             <div className="card table-card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h3 style={{ fontSize: '1.15rem' }}>Step 1: Specific Lots to Sell (Tax-Optimal Order)</h3>
+                        <h3 style={{ fontSize: '1.15rem' }}>Specific Lots to Sell</h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>
-                            Sorted by lowest tax drag percentage (highest efficiency first) to minimize capital gains taxes.
+                            Sorted by lowest tax impact (highest tax efficiency first) to minimize capital gains tax.
                         </p>
                     </div>
                     {lotsToSell.length > 0 && (
@@ -733,9 +733,9 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             <div className="card table-card" style={{ marginBottom: '1.5rem' }}>
                 <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <div>
-                        <h3 style={{ fontSize: '1.15rem' }}>Step 2: Deploy Proceeds & Retain Cash</h3>
+                        <h3 style={{ fontSize: '1.15rem' }}>Planned Purchases & Cash Reserve</h3>
                         <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginTop: '2px' }}>
-                            Reinvest liquidation proceeds into underweight assets and retain your desired cash balance.
+                            Reinvest liquidation proceeds into underweight assets and retain target cash balance.
                         </p>
                     </div>
                     {stocksToBuy.length > 0 && (
