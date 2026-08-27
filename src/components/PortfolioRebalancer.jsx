@@ -102,7 +102,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             if (isUninitialized) {
                 const initial = { CASH: 0 };
                 symbols.forEach(s => {
-                    initial[s] = parseFloat((currentAllocation[s] || 0).toFixed(2));
+                    initial[s] = currentAllocation[s] || 0;
                 });
                 localStorage.setItem('portfolio_target_allocations', JSON.stringify(initial));
                 return initial;
@@ -112,7 +112,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
             let hasMissing = false;
             symbols.forEach(s => {
                 if (updated[s] === undefined || isNaN(updated[s])) {
-                    updated[s] = parseFloat((currentAllocation[s] || 0).toFixed(2));
+                    updated[s] = currentAllocation[s] || 0;
                     hasMissing = true;
                 }
             });
@@ -143,7 +143,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
     // Save target allocations from dollar input
     const updateTargetDollar = (symbol, dollarVal) => {
         const parsed = isNaN(dollarVal) ? 0 : Math.max(0, dollarVal);
-        const pctVal = totalValue > 0 ? parseFloat(((parsed / totalValue) * 100).toFixed(2)) : 0;
+        const pctVal = totalValue > 0 ? (parsed / totalValue) * 100 : 0;
         const updated = { ...targetAllocations, [symbol]: pctVal };
         const updatedDollars = { ...lockedDollarAmounts, [symbol]: parsed };
         setTargetAllocations(updated);
@@ -157,7 +157,7 @@ const PortfolioRebalancer = ({ activeLots, prices, w2Income, totalValue }) => {
         const updated = { CASH: 0 };
         const updatedDollars = { CASH: 0 };
         symbols.forEach(s => {
-            const pct = parseFloat((currentAllocation[s] || 0).toFixed(2));
+            const pct = currentAllocation[s] || 0;
             updated[s] = pct;
             updatedDollars[s] = totalValue > 0 ? (pct / 100) * totalValue : 0;
         });

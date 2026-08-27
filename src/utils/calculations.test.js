@@ -91,7 +91,7 @@ describe('calculations.js - Portfolio Rebalancing & Taxes with Seeded Random Por
                 const currentAllocation = {};
                 symbols.forEach(s => {
                     const symVal = activeLots.filter(l => l.symbol === s).reduce((sum, l) => sum + l.marketValue, 0);
-                    currentAllocation[s] = parseFloat(((symVal / totalValue) * 100).toFixed(2));
+                    currentAllocation[s] = (symVal / totalValue) * 100;
                 });
                 currentAllocation['CASH'] = 0;
 

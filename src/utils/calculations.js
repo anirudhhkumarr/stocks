@@ -330,13 +330,6 @@ export function calculateRebalancePlan(
 
             let diffVal = targetVal - currentVal; // negative = sell (overweight), positive = buy (underweight)
 
-            // Tolerance check: if target is within 0.05% of current allocation or within $1.00 of currentVal, no rebalance action
-            const isNearCurrent = Math.abs(targetPct - currentPct) < 0.05 && targetCashPct === 0 && estTax === 0;
-            if (Math.abs(diffVal) < 1.0 || isNearCurrent) {
-                diffVal = 0;
-                targetVal = currentVal;
-            }
-
             const history = prices[symbol];
             let latestPrice = 0;
             if (history) {
@@ -360,13 +353,9 @@ export function calculateRebalancePlan(
         });
 
         // Cash allocation
-        let targetCashVal = targetCashValFromLock !== null
+        const targetCashVal = targetCashValFromLock !== null
             ? targetCashValFromLock
             : (targetCashPct / 100) * effectivePortfolioValue;
-
-        if (Math.abs(targetCashVal) < 1.0) {
-            targetCashVal = 0;
-        }
 
         // Tax-efficient lot selection for overweight symbols
         const lotsToSell = [];
@@ -376,8 +365,8 @@ export function calculateRebalancePlan(
 
         symbols.forEach(symbol => {
             const alloc = stockAllocations.find(a => a.symbol === symbol);
-            // Ignore if balanced or not overweight by at least $1.00
-            if (!alloc || alloc.diffValue >= -1.0) return;
+            // Ignore if balanced or not overweight beyond cent rounding
+            if (!alloc || alloc.diffValue >= -0.01) return;
 
             let neededLiquidation = Math.abs(alloc.diffValue);
 
@@ -395,10 +384,10 @@ export function calculateRebalancePlan(
             }).sort((a, b) => a.efficiency - b.efficiency);
 
             for (const lot of symbolLots) {
-                if (neededLiquidation <= 0.5) break;
+                if (neededLiquidation <= 0.005) break;
 
                 const isLongTerm = lot.isLongTerm;
-                if (lot.marketValue <= neededLiquidation + 0.5) {
+                if (lot.marketValue <= neededLiquidation + 0.005) {
                     // Sell full lot
                     lotsToSell.push({
                         symbol: lot.symbol,
@@ -458,7 +447,7 @@ export function calculateRebalancePlan(
         let totalBuyAmount = 0;
 
         stockAllocations.forEach(alloc => {
-            if (alloc.diffValue > 1.0) {
+            if (alloc.diffValue > 0.01) {
                 const buyAmount = alloc.diffValue;
                 const buyShares = alloc.latestPrice > 0 ? (buyAmount / alloc.latestPrice) : 0;
                 stocksToBuy.push({
@@ -474,12 +463,12 @@ export function calculateRebalancePlan(
         // Projected post-rebalance allocations
         const postRebalanceAllocations = stockAllocations.map(alloc => {
             let postValue = alloc.currentValue;
-            if (alloc.diffValue < -1.0) {
+            if (alloc.diffValue < -0.01) {
                 const soldForSymbol = lotsToSell
                     .filter(l => l.symbol === alloc.symbol)
                     .reduce((sum, l) => sum + l.marketValue, 0);
                 postValue = Math.max(0, alloc.currentValue - soldForSymbol);
-            } else if (alloc.diffValue > 1.0) {
+            } else if (alloc.diffValue > 0.01) {
                 const boughtForSymbol = stocksToBuy
                     .filter(b => b.symbol === alloc.symbol)
                     .reduce((sum, b) => sum + b.buyAmount, 0);
@@ -495,7 +484,7 @@ export function calculateRebalancePlan(
             };
         });
 
-        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 1.0;
+        const isBalanced = lotsToSell.length === 0 && stocksToBuy.length === 0 && targetCashVal < 0.01;
 
         finalResult = {
             stockAllocations: postRebalanceAllocations,
