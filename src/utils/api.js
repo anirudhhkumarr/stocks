@@ -10,14 +10,25 @@ function sleep(ms) {
 }
 
 /**
- * Get cached stock data from localStorage if it exists and is less than 1 hour old.
+ * Get cached stock data from localStorage if it exists, is less than 1 hour old,
+ * and covers the requested startDate if specified.
  */
-function getCached(symbol) {
+function getCached(symbol, startDate = null) {
     try {
         const raw = localStorage.getItem(`stock_cache_${symbol}`);
         if (!raw) return null;
         const { data, timestamp } = JSON.parse(raw);
         if (Date.now() - timestamp < CACHE_TTL_MS) {
+            if (startDate && data) {
+                const dates = Object.keys(data).sort();
+                const earliestCached = dates[0];
+                const reqDateStr = new Date(startDate).toISOString().split('T')[0];
+                if (earliestCached && earliestCached > reqDateStr) {
+                    // Cached data does not go back far enough for the requested first buy date
+                    localStorage.removeItem(`stock_cache_${symbol}`);
+                    return null;
+                }
+            }
             console.log(`Cache hit: ${symbol} (${Math.round((Date.now() - timestamp) / 60000)}m old)`);
             return data;
         }
@@ -32,8 +43,17 @@ function setCache(symbol, data) {
     } catch { /* ignore quota errors */ }
 }
 
-async function fetchLiveYahoo(symbol) {
-    const yahooPath = `/v8/finance/chart/${symbol}?interval=1d&range=5y&events=history&includeAdjustedClose=true`;
+async function fetchLiveYahoo(symbol, startDate = null) {
+    let period1 = 0;
+    if (startDate) {
+        const t = new Date(startDate).getTime();
+        if (!isNaN(t)) {
+            // Start 7 days before first buy to ensure we have a trading day price on or before buy date
+            period1 = Math.max(0, Math.floor(t / 1000) - (86400 * 7));
+        }
+    }
+    const period2 = Math.floor(Date.now() / 1000) + 86400;
+    const yahooPath = `/v8/finance/chart/${symbol}?period1=${period1}&period2=${period2}&interval=1d&events=history&includeAdjustedClose=true`;
 
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
         try {
@@ -80,13 +100,13 @@ async function fetchLiveYahoo(symbol) {
     return null;
 }
 
-export async function fetchStockData(symbol) {
+export async function fetchStockData(symbol, startDate = null) {
     // 1. Session localStorage cache
-    const cached = getCached(symbol);
+    const cached = getCached(symbol, startDate);
     if (cached) return cached;
 
     // 2. Live CORS fallback for symbols not in the baked set
-    const live = await fetchLiveYahoo(symbol);
+    const live = await fetchLiveYahoo(symbol, startDate);
     if (live) setCache(symbol, live);
     return live;
 }
@@ -94,17 +114,31 @@ export async function fetchStockData(symbol) {
 /**
  * Fetch multiple symbols sequentially with a delay between each request.
  */
-export async function fetchStockDataSequential(symbols, existingData = {}) {
+export async function fetchStockDataSequential(symbols, existingData = {}, startDates = {}) {
     const results = {};
     for (let i = 0; i < symbols.length; i++) {
         const symbol = symbols[i];
-        if (existingData[symbol]) continue;
+        const startDate = startDates[symbol] || null;
 
-        const data = await fetchStockData(symbol);
+        if (existingData[symbol]) {
+            if (startDate) {
+                const existingDates = Object.keys(existingData[symbol]).sort();
+                const earliestDate = existingDates[0];
+                const reqDateStr = new Date(startDate).toISOString().split('T')[0];
+                if (earliestDate && earliestDate <= reqDateStr) {
+                    continue;
+                }
+            } else {
+                continue;
+            }
+        }
+
+        const data = await fetchStockData(symbol, startDate);
         if (data) results[symbol] = data;
 
         // Delay only when the next symbol will need a live fetch
-        if (i < symbols.length - 1 && !existingData[symbols[i + 1]] && !getCached(symbols[i + 1])) {
+        const nextSymbol = symbols[i + 1];
+        if (i < symbols.length - 1 && (!existingData[nextSymbol] || !getCached(nextSymbol, startDates[nextSymbol]))) {
             await sleep(INTER_REQUEST_DELAY_MS);
         }
     }

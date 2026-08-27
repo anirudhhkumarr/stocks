@@ -135,4 +135,30 @@ describe('api.js', () => {
             'MSFT': { [MOCK_DATE]: MOCK_PRICE }
         });
     });
+
+    it('should fetch history back to first buy date when startDate is specified', async () => {
+        const startDate = '2015-06-01';
+        await fetchStockData(MOCK_SYMBOL, startDate);
+
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        const fetchUrl = decodeURIComponent(globalThis.fetch.mock.calls[0][0]);
+        expect(fetchUrl).toContain('period1=');
+        // period1 should be before June 2015 timestamp (approx 1433116800 - margin)
+        expect(fetchUrl).toContain('/v8/finance/chart/AAPL?period1=');
+    });
+
+    it('should re-fetch if cache does not go back far enough for startDate', async () => {
+        // Cache only covers 2023-01-01
+        localStorageStore[`stock_cache_${MOCK_SYMBOL}`] = JSON.stringify({
+            data: { '2023-01-01': 150 },
+            timestamp: Date.now()
+        });
+
+        // Request requires history back to 2018-05-10
+        const data = await fetchStockData(MOCK_SYMBOL, '2018-05-10');
+
+        // Should invalidate old cache and fetch live
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+        expect(data).toEqual({ [MOCK_DATE]: MOCK_PRICE });
+    });
 });

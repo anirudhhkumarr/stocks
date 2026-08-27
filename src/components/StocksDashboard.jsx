@@ -73,8 +73,15 @@ const StocksDashboard = () => {
         const symbols = symbolsKey.split(',').filter(s => s);
         if (symbols.length === 0) return;
 
+        const startDates = {};
+        symbols.forEach(s => {
+            const symLots = (portfolio.lots || []).filter(l => l.symbol === s);
+            const minDate = symLots.reduce((min, lot) => (!min || lot.openDate < min ? lot.openDate : min), null);
+            if (minDate) startDates[s] = minDate;
+        });
+
         const fetchAll = async () => {
-            const newPrices = await fetchStockDataSequential(symbols, prices);
+            const newPrices = await fetchStockDataSequential(symbols, prices, startDates);
             if (Object.keys(newPrices).length > 0) {
                 setPrices(prev => ({ ...prev, ...newPrices }));
             }
@@ -82,7 +89,7 @@ const StocksDashboard = () => {
 
         fetchAll();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [symbolsKey]);
+    }, [symbolsKey, portfolio.lots]);
 
     // Helper to get latest price for a symbol
     const getLatestPrice = useCallback((symbol) => {
@@ -191,8 +198,15 @@ const StocksDashboard = () => {
         if (pricesCount === 0 || lotsCount === 0) return;
 
         const rates = getTaxRates(w2Income);
-        const firstSymbol = Object.keys(prices)[0];
-        let dates = Object.keys(prices[firstSymbol] || {}).sort();
+
+        // Union all dates across all fetched symbol histories
+        const allDatesSet = new Set();
+        Object.values(prices).forEach(history => {
+            if (history) {
+                Object.keys(history).forEach(d => allDatesSet.add(d));
+            }
+        });
+        let dates = Array.from(allDatesSet).sort();
 
         const earliestDate = activeLots.reduce((min, lot) => {
             return !min || lot.openDate < min ? lot.openDate : min;
@@ -202,14 +216,18 @@ const StocksDashboard = () => {
             dates = dates.filter(d => d >= earliestDate);
         }
 
+        const lastKnownPrice = {};
+
         const hist = dates.map(date => {
             let v = 0, c = 0, tax = 0;
             const dateObj = new Date(date);
 
             activeLots.forEach(lot => {
-                let p = (prices[lot.symbol] && prices[lot.symbol][date]);
-                if (p === undefined || p === null) {
-                    p = getLatestPrice(lot.symbol);
+                let p = prices[lot.symbol]?.[date];
+                if (p !== undefined && p !== null && !isNaN(p)) {
+                    lastKnownPrice[lot.symbol] = p;
+                } else {
+                    p = lastKnownPrice[lot.symbol] ?? getLatestPrice(lot.symbol);
                 }
                 if (typeof p !== 'number' || isNaN(p)) p = 0;
 
@@ -235,7 +253,7 @@ const StocksDashboard = () => {
         });
         setHistoryData(hist);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pricesCount, lotsCount, w2Income]);
+    }, [pricesCount, lotsCount, w2Income, prices, activeLots]);
 
     return (
         <div className="stocks-dashboard">
