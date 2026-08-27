@@ -5,7 +5,13 @@ const TARGET = '?https%3A%2F%2Fquery1.finance.yahoo.com%2Fv8%2Ffinance%2Fchart%2
 
 console.log(`[test] Verifying proxy at ${PROXY_URL}`);
 
-https.get(PROXY_URL + TARGET, (res) => {
+const options = {
+    headers: {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+    }
+};
+
+https.get(PROXY_URL + TARGET, options, (res) => {
     console.log(`[test] Proxy responded with status: ${res.statusCode}`);
     if (res.statusCode >= 400) {
         console.error(`[test] ❌ Proxy is not returning a success response! Did you deploy the Cloudflare Worker?`);

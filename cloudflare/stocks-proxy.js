@@ -39,6 +39,9 @@ async function proxyRequest(request, targetUrl) {
   headers.delete('host');
   headers.delete('origin');
   headers.delete('referer');
+  if (!headers.get('user-agent')) {
+    headers.set('user-agent', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+  }
 
   const upstream = await fetch(target, {
     method: request.method,
