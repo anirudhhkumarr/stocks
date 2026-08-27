@@ -82,7 +82,7 @@ async function fetchLiveYahoo(symbol) {
             }
 
             const targetUrl = `https://query1.finance.yahoo.com${yahooPath}`;
-            const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(targetUrl)}`;
+            const proxyUrl = `https://stocks-proxy.anirudhkumar.workers.dev/?${encodeURIComponent(targetUrl)}`;
 
             const response = await fetch(proxyUrl);
             if (!response.ok) throw new Error(`Proxy status ${response.status}`);
