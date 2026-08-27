@@ -5,11 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "data": "node scripts/fetch-data.mjs",
-    "build": "npm run test && npm run data && vite build",
+    "build": "npm run test && vite build",
     "lint": "eslint .",
-    "clean": "rm -rf dist cloudflare/.wrangler public/data/prices.json",
-    "test": "node scripts/test-proxy.mjs",
+    "clean": "rm -rf dist cloudflare/.wrangler",
+    "test": "vitest run",
+    "test:proxy": "node scripts/test-proxy.mjs",
     "preview": "vite preview",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
@@ -27,7 +27,9 @@
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
     "eslint-plugin-react-refresh": "^0.4.9",
     "globals": "^15.9.0",
+    "jsdom": "^27.0.1",
     "vite": "^5.4.1",
-    "vite-plugin-singlefile": "^2.0.2"
+    "vite-plugin-singlefile": "^2.0.2",
+    "vitest": "^3.2.7"
   }
 }
