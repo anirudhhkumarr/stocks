@@ -846,27 +846,41 @@ body {
     
     .main-header {
         flex-direction: column;
-        align-items: flex-start;
+        align-items: center;
+        text-align: center;
         gap: 1rem;
+    }
+    
+    .tab-nav {
+        gap: 1rem;
+        flex-wrap: wrap;
+        justify-content: center;
     }
     
     .actions-toolbar {
         flex-direction: column;
         align-items: stretch;
+        padding: 1rem;
     }
 
     .actions-group {
-        flex-wrap: wrap;
+        flex-direction: column;
         width: 100%;
-        justify-content: space-between;
+        gap: 0.75rem;
+    }
+    
+    .toolbar-input {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .toolbar-btn {
+        width: 100%;
+        justify-content: center;
     }
     
     .charts-grid {
         grid-template-columns: 1fr;
-    }
-
-    .toolbar-input {
-        width: 100%;
     }
     
     .rebalance-metrics-grid {
@@ -876,5 +890,40 @@ body {
     .summary-ribbon {
         grid-template-columns: 1fr;
         gap: 1rem;
+    }
+
+    .card {
+        padding: 1rem;
+        overflow-x: auto;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        margin: 0 -1rem;
+        padding: 0 1rem;
+    }
+
+    .data-table th, .data-table td {
+        white-space: nowrap;
+    }
+
+    .legend {
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+    
+    .rebalance-btn-primary, .rebalance-btn-secondary {
+        width: 100%;
+        justify-content: center;
+        margin-bottom: 0.5rem;
+    }
+
+    .file-upload-wrapper, .w2-input-wrapper {
+        width: 100%;
+    }
+    
+    .rebalancer-header-card .actions-group {
+        flex-direction: column;
     }
 }
