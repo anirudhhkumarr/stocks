@@ -837,3 +837,44 @@ body {
     font-size: 11px;
     font-weight: 600;
 }
+
+/* Mobile Responsiveness */
+@media (max-width: 768px) {
+    .app-container {
+        padding: 1rem;
+    }
+    
+    .main-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+    
+    .actions-toolbar {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .actions-group {
+        flex-wrap: wrap;
+        width: 100%;
+        justify-content: space-between;
+    }
+    
+    .charts-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .toolbar-input {
+        width: 100%;
+    }
+    
+    .rebalance-metrics-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .summary-ribbon {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+    }
+}
