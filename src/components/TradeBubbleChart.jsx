@@ -13,22 +13,45 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
         }
 
         if (isYearlyTicks) {
-            const grouped = d3.group(base, d => new Date(d.openDate).getFullYear());
-            return Array.from(grouped, ([year, items]) => {
-                const totalCost = d3.sum(items, d => d.costBasis);
-                const totalValue = d3.sum(items, d => d.marketValue);
-                return {
-                    symbol: `Year ${year}`,
-                    costBasis: totalCost,
-                    marketValue: totalValue,
-                    gainLoss: totalValue - totalCost,
-                    openDate: new Date(year, 0, 1),
-                    qty: d3.sum(items, d => d.qty),
-                    isGrouped: true,
-                    tradeCount: items.length,
-                    id: `year-${year}`
-                };
+            // Group lots by (symbol, year) so each stock has its own aggregated bubble per year
+            const grouped = d3.group(
+                base,
+                d => d.symbol,
+                d => new Date(d.openDate).getFullYear()
+            );
+
+            const result = [];
+            grouped.forEach((yearsMap, symbol) => {
+                yearsMap.forEach((items, year) => {
+                    const totalCost = d3.sum(items, d => d.costBasis);
+                    const totalValue = d3.sum(items, d => d.marketValue);
+                    const totalQty = d3.sum(items, d => d.qty);
+
+                    // Cost-weighted average buy date (fallback to share-weighted or mean date if costBasis is 0)
+                    const rawTime = totalCost > 0
+                        ? d3.sum(items, d => new Date(d.openDate).getTime() * d.costBasis) / totalCost
+                        : totalQty > 0
+                            ? d3.sum(items, d => new Date(d.openDate).getTime() * d.qty) / totalQty
+                            : d3.mean(items, d => new Date(d.openDate).getTime());
+
+                    const weightedTime = Math.round(rawTime);
+
+                    result.push({
+                        symbol,
+                        year: Number(year),
+                        costBasis: totalCost,
+                        marketValue: totalValue,
+                        gainLoss: totalValue - totalCost,
+                        openDate: new Date(weightedTime),
+                        qty: totalQty,
+                        isGrouped: true,
+                        tradeCount: items.length,
+                        id: `${symbol}-${year}`
+                    });
+                });
             });
+
+            return result;
         }
 
         return base.map((l, i) => ({
@@ -141,18 +164,10 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
             }
 
             scaleData.forEach(d => {
-                // Determine the ROI for this bubble (individual or yearly group)
-                // For individual trades, we use its own cost basis vs its stock's base price at chart start
-                // For yearly groups, we use the aggregate cost basis vs the base price (if it's a single stock)
-                // If it's mixed stocks, ROI is harder, so we use its internal current/cost ratio (normalized to chart start roughly)
-                const actualSymbol = (d.isGrouped && d.symbol.startsWith('Year ')) ? null : d.symbol;
-                const base = actualSymbol ? basePrices[actualSymbol] : null;
-
-                if (base) {
+                const base = basePrices[d.symbol];
+                if (base && d.qty > 0) {
                     historyPoints.push(((d.costBasis / d.qty) / base - 1) * 100);
-                } else {
-                    // Fallback: use marketValue/costBasis as a proxy for its "position" on the Y axis 
-                    // this isn't perfect for mixed yearly groups but keeps them in frame
+                } else if (d.costBasis > 0) {
                     historyPoints.push((d.marketValue / d.costBasis - 1) * 100);
                 }
             });
@@ -249,23 +264,30 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                 .attr('class', 'bubble-group')
                 .style('display', d => cutoffDate && d.openDate < cutoffDate ? 'none' : null)
                 .attr('transform', d => {
-                    const base = basePrices[d.symbol] || basePrices[d.symbol.replace('Year ', '')];
+                    const base = basePrices[d.symbol];
                     const tx = x(d.openDate);
-                    const perf = base ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
+                    const perf = (base && d.qty > 0) ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
                     const ty = y(isLogScale ? perf + 100 : perf);
                     return `translate(${tx},${ty})`;
                 })
                 .on('mouseover', function (event, d) {
                     d3.select(this).select('circle').attr('fill-opacity', 0.9).attr('stroke-width', 2);
                     tooltip.style('display', null);
-                    const ratio = d.marketValue / d.costBasis;
-                    const dateStr = d.isGrouped ? 'Various' : d.openDate.toLocaleDateString();
+                    const ratio = d.costBasis > 0 ? (d.marketValue / d.costBasis) : 1;
+                    const headerText = d.isGrouped
+                        ? `${d.symbol} (${d.year}) • ${d.tradeCount} trade${d.tradeCount > 1 ? 's' : ''}`
+                        : `${d.symbol} (${d.openDate.toLocaleDateString()})`;
+
+                    const avgCost = d.qty > 0 ? (d.costBasis / d.qty) : 0;
+                    const dateFormatted = d.openDate.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
                     const lines = [
-                        `${d.symbol}${d.isGrouped ? ` (${d.tradeCount} trades)` : ` (${dateStr})`}`,
-                        `Qty: ${d.qty.toFixed(2)}`,
-                        `Cost/Sh: $${(d.costBasis / d.qty).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `Value: $${d.marketValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        `Total Ret: ${((ratio - 1) * 100).toFixed(1)}%`
+                        headerText,
+                        d.isGrouped ? `Weighted Avg Date: ${dateFormatted}` : `Trade Date: ${dateFormatted}`,
+                        `Shares: ${d.qty.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`,
+                        `Avg Cost/Sh: $${avgCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+                        `Cost Basis: $${d.costBasis.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                        `Market Value: $${d.marketValue.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+                        `Total Ret: ${((ratio - 1) * 100).toFixed(1)}% ($${(d.marketValue - d.costBasis).toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })})`
                     ];
                     tooltipText.selectAll('tspan').remove();
                     lines.forEach((line, i) => {
@@ -274,9 +296,9 @@ const TradeBubbleChart = ({ lots, allLots, prices, range, isLogScale, isYearlyTi
                     });
                     const bbox = tooltipText.node().getBBox();
                     tooltipBg.attr('width', bbox.width + 24).attr('height', bbox.height + 20);
-                    const base = basePrices[d.symbol] || basePrices[d.symbol.replace('Year ', '')];
+                    const base = basePrices[d.symbol];
                     const tx = x(d.openDate) + 15;
-                    const perf = base ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
+                    const perf = (base && d.qty > 0) ? ((d.costBasis / d.qty) / base - 1) * 100 : 0;
                     const ty = y(isLogScale ? perf + 100 : perf) - bbox.height / 2;
                     let finalTx = tx;
                     if (tx + bbox.width + 40 > innerWidth) finalTx = x(d.openDate) - bbox.width - 35;
