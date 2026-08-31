@@ -3,36 +3,49 @@
 const MAX_RETRIES = 3;
 const BASE_DELAY_MS = 2000;
 const INTER_REQUEST_DELAY_MS = 1500;
-const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const TODAY_CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour for today's price updates
+const HISTORY_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 1 week for historical data
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
- * Get cached stock data from localStorage if it exists, is less than 1 hour old,
- * and covers the requested startDate if specified.
+ * Get cached stock data from localStorage.
+ * - If less than 1 hour old and covers startDate: fresh cache hit.
+ * - If between 1 hour and 1 week old: returns cached data with isFresh: false (older history preserved).
+ * - If older than 1 week: invalidates cache.
  */
 function getCached(symbol, startDate = null) {
     try {
         const raw = localStorage.getItem(`stock_cache_${symbol}`);
         if (!raw) return null;
         const { data, timestamp } = JSON.parse(raw);
-        if (Date.now() - timestamp < CACHE_TTL_MS) {
-            if (startDate && data) {
-                const dates = Object.keys(data).sort();
-                const earliestCached = dates[0];
-                const reqDateStr = new Date(startDate).toISOString().split('T')[0];
-                if (earliestCached && earliestCached > reqDateStr) {
-                    // Cached data does not go back far enough for the requested first buy date
-                    localStorage.removeItem(`stock_cache_${symbol}`);
-                    return null;
-                }
-            }
-            console.log(`Cache hit: ${symbol} (${Math.round((Date.now() - timestamp) / 60000)}m old)`);
-            return data;
+        const age = Date.now() - timestamp;
+
+        // Invalidate if older than 1 week (7 days)
+        if (age >= HISTORY_CACHE_TTL_MS) {
+            localStorage.removeItem(`stock_cache_${symbol}`);
+            return null;
         }
-        localStorage.removeItem(`stock_cache_${symbol}`);
+
+        if (startDate && data) {
+            const dates = Object.keys(data).sort();
+            const earliestCached = dates[0];
+            const reqDateStr = new Date(startDate).toISOString().split('T')[0];
+            if (earliestCached && earliestCached > reqDateStr) {
+                // Cached data does not go back far enough for the requested first buy date
+                localStorage.removeItem(`stock_cache_${symbol}`);
+                return null;
+            }
+        }
+
+        if (age < TODAY_CACHE_TTL_MS) {
+            console.log(`Cache hit: ${symbol} (${Math.round(age / 60000)}m old)`);
+            return { data, isFresh: true };
+        }
+
+        return { data, isFresh: false };
     } catch { /* ignore corrupt cache */ }
     return null;
 }
@@ -101,14 +114,31 @@ async function fetchLiveYahoo(symbol, startDate = null) {
 }
 
 export async function fetchStockData(symbol, startDate = null) {
-    // 1. Session localStorage cache
     const cached = getCached(symbol, startDate);
-    if (cached) return cached;
+    if (cached && cached.isFresh) {
+        return cached.data;
+    }
 
-    // 2. Live CORS fallback for symbols not in the baked set
-    const live = await fetchLiveYahoo(symbol, startDate);
-    if (live) setCache(symbol, live);
-    return live;
+    // If we have older cached history (< 1 week old), only fetch recent 7 days to refresh today
+    let fetchStartDate = startDate;
+    if (cached && !cached.isFresh && cached.data) {
+        const recentDate = new Date();
+        recentDate.setDate(recentDate.getDate() - 7);
+        fetchStartDate = recentDate.toISOString().split('T')[0];
+    }
+
+    const live = await fetchLiveYahoo(symbol, fetchStartDate);
+    if (live) {
+        const merged = (cached && cached.data) ? { ...cached.data, ...live } : live;
+        setCache(symbol, merged);
+        return merged;
+    }
+
+    if (cached && cached.data) {
+        return cached.data;
+    }
+
+    return null;
 }
 
 /**
@@ -138,7 +168,8 @@ export async function fetchStockDataSequential(symbols, existingData = {}, start
 
         // Delay only when the next symbol will need a live fetch
         const nextSymbol = symbols[i + 1];
-        if (i < symbols.length - 1 && (!existingData[nextSymbol] || !getCached(nextSymbol, startDates[nextSymbol]))) {
+        const nextCached = getCached(nextSymbol, startDates[nextSymbol]);
+        if (i < symbols.length - 1 && (!existingData[nextSymbol] || (!nextCached || !nextCached.isFresh))) {
             await sleep(INTER_REQUEST_DELAY_MS);
         }
     }

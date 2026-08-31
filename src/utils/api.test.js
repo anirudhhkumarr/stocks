@@ -92,8 +92,8 @@ describe('api.js', () => {
         expect(data).toEqual(mockData);
     });
 
-    it('should fetch live data if cache is older than 1 hour', async () => {
-        // Pre-populate cache with old data
+    it('should fetch live data and merge if cache is older than 1 hour', async () => {
+        // Pre-populate cache with data older than 1 hour (but < 1 week)
         const oldData = { '2023-01-01': 100 };
         localStorageStore[`stock_cache_${MOCK_SYMBOL}`] = JSON.stringify({
             data: oldData,
@@ -102,13 +102,25 @@ describe('api.js', () => {
 
         const data = await fetchStockData(MOCK_SYMBOL);
         
-        // Fetch SHOULD be called
+        // Fetch SHOULD be called to refresh today's price
         expect(globalThis.fetch).toHaveBeenCalledTimes(1);
         
-        // Old cache should be removed before setting new
+        // Should return merged data preserving historical points
+        expect(data).toEqual({ '2023-01-01': 100, [MOCK_DATE]: MOCK_PRICE });
+    });
+
+    it('should remove cache and re-fetch completely if older than 1 week', async () => {
+        const expiredData = { '2023-01-01': 100 };
+        localStorageStore[`stock_cache_${MOCK_SYMBOL}`] = JSON.stringify({
+            data: expiredData,
+            timestamp: Date.now() - (8 * 24 * 60 * 60 * 1000) // 8 days old (> 1 week)
+        });
+
+        const data = await fetchStockData(MOCK_SYMBOL);
+
+        // Fetch SHOULD be called
+        expect(globalThis.fetch).toHaveBeenCalledTimes(1);
         expect(localStorage.removeItem).toHaveBeenCalledWith(`stock_cache_${MOCK_SYMBOL}`);
-        
-        // Should return newly fetched data
         expect(data).toEqual({ [MOCK_DATE]: MOCK_PRICE });
     });
 

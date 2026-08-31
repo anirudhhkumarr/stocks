@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Briefcase } from 'lucide-react';
 import StocksDashboard from './components/StocksDashboard';
 import MFDashboard from './components/MFDashboard';
+import SectorDashboard from './components/SectorDashboard';
 
 function App() {
   const [activeTab, setActiveTab] = useState('stocks');
@@ -27,11 +28,19 @@ function App() {
           >
             Mutual Funds
           </button>
+          <button
+            className={`tab-btn ${activeTab === 'sectors' ? 'active' : ''}`}
+            onClick={() => setActiveTab('sectors')}
+          >
+            Sector Analysis
+          </button>
         </nav>
       </header>
 
       <main className="container">
-        {activeTab === 'stocks' ? <StocksDashboard /> : <MFDashboard />}
+        {activeTab === 'stocks' && <StocksDashboard />}
+        {activeTab === 'mfs' && <MFDashboard />}
+        {activeTab === 'sectors' && <SectorDashboard />}
       </main>
     </div>
   );
