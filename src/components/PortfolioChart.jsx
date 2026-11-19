@@ -33,23 +33,34 @@ const PortfolioChart = ({ historyData, range, isLogScale, isYearlyTicks }) => {
             // Filter data by range
             let filteredData = historyData;
 
-            // Yearly Ticks Logic (Original Implementation)
+            // Yearly Ticks Logic
             if (isYearlyTicks && historyData.length > 0) {
                 const lastDataPoint = historyData[historyData.length - 1];
                 const lastDateObj = new Date(lastDataPoint.date);
-                const targetDates = new Set();
                 const minYear = new Date(historyData[0].date).getFullYear();
 
+                const selectedPoints = [];
                 let currentCursor = new Date(lastDateObj);
 
-                // Keep adding dates as long as we haven't gone past the start year
+                // For each year back to minYear, find the closest available trading day on or before that date
                 while (currentCursor.getFullYear() >= minYear) {
-                    const dateStr = currentCursor.toISOString().split('T')[0];
-                    targetDates.add(dateStr);
+                    const targetStr = currentCursor.toISOString().split('T')[0];
+                    let matched = null;
+                    for (let i = historyData.length - 1; i >= 0; i--) {
+                        if (historyData[i].date <= targetStr) {
+                            matched = historyData[i];
+                            break;
+                        }
+                    }
+                    if (matched) {
+                        selectedPoints.push(matched);
+                    }
                     currentCursor.setFullYear(currentCursor.getFullYear() - 1);
                 }
 
-                filteredData = historyData.filter(d => targetDates.has(d.date));
+                const uniquePoints = Array.from(new Set(selectedPoints));
+                uniquePoints.sort((a, b) => a.date.localeCompare(b.date));
+                filteredData = uniquePoints;
             }
             else if (range !== 'max') {
                 const daysMap = { '1m': 30, '6m': 180, '1y': 365, '2y': 730, '3y': 1095, '5y': 1825 };
