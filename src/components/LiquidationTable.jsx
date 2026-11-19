@@ -5,11 +5,16 @@ import { formatCurrency } from '../utils/calculations';
 const LiquidationTable = ({ lots, targetAmount }) => {
   const [sortConfig, setSortConfig] = useState({ key: null, direction: null });
 
+  const getLotEstTax = (lot) => {
+    const gain = (lot.marketValue || 0) - (lot.costBasis || 0);
+    return gain < 0 ? 0 : Math.max(0, lot.estTax || 0);
+  };
+
   const { totalProceeds, totalTax } = useMemo(() => {
     return (lots || []).reduce(
       (acc, lot) => {
         acc.totalProceeds += lot.marketValue || 0;
-        acc.totalTax += lot.estTax || 0;
+        acc.totalTax += getLotEstTax(lot);
         return acc;
       },
       { totalProceeds: 0, totalTax: 0 }
@@ -53,8 +58,8 @@ const LiquidationTable = ({ lots, targetAmount }) => {
           valB = b.efficiency || 0;
           break;
         case 'estTax':
-          valA = a.estTax || 0;
-          valB = b.estTax || 0;
+          valA = getLotEstTax(a);
+          valB = getLotEstTax(b);
           break;
         case 'openDate':
           valA = new Date(a.openDate).getTime() || 0;
@@ -151,7 +156,8 @@ const LiquidationTable = ({ lots, targetAmount }) => {
           </thead>
           <tbody>
             {sortedLots.map((lot, i) => {
-              const gain = lot.marketValue - lot.costBasis;
+              const gain = (lot.marketValue || 0) - (lot.costBasis || 0);
+              const estTax = getLotEstTax(lot);
               const efficiencyPct = (lot.efficiency || 0) * 100;
 
               return (
@@ -163,7 +169,7 @@ const LiquidationTable = ({ lots, targetAmount }) => {
                   <td className={gain >= 0 ? 'positive' : 'negative'}>{formatCurrency(gain)}</td>
                   <td>{lot.holdingPeriod}</td>
                   <td className={lot.efficiency < 0 ? 'positive' : 'negative'}>{efficiencyPct.toFixed(2)}%</td>
-                  <td className="negative">{formatCurrency(lot.estTax || 0)}</td>
+                  <td className={estTax > 0 ? 'negative' : ''}>{formatCurrency(estTax)}</td>
                   <td>{lot.openDate}</td>
                 </tr>
               );

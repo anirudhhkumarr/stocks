@@ -156,11 +156,12 @@ const StocksDashboard = () => {
             cumB += lot.costBasis;
             cumT += lotTaxDelta;
 
+            const gain = (lot.marketValue || 0) - (lot.costBasis || 0);
             points.push({
                 x: cumP,
                 y: cumT,
                 basis: cumB,
-                lot: { ...lot, estTax: lotTaxDelta }
+                lot: { ...lot, estTax: gain < 0 ? 0 : Math.max(0, lotTaxDelta) }
             });
         });
         setTaxSimData(points);
