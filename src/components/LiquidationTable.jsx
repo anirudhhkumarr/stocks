@@ -10,14 +10,15 @@ const LiquidationTable = ({ lots, targetAmount }) => {
     return gain < 0 ? 0 : Math.max(0, lot.estTax || 0);
   };
 
-  const { totalProceeds, totalTax } = useMemo(() => {
+  const { totalProceeds, totalCostBasis, totalTax } = useMemo(() => {
     return (lots || []).reduce(
       (acc, lot) => {
         acc.totalProceeds += lot.marketValue || 0;
+        acc.totalCostBasis += lot.costBasis || 0;
         acc.totalTax += getLotEstTax(lot);
         return acc;
       },
-      { totalProceeds: 0, totalTax: 0 }
+      { totalProceeds: 0, totalCostBasis: 0, totalTax: 0 }
     );
   }, [lots]);
 
@@ -38,6 +39,10 @@ const LiquidationTable = ({ lots, targetAmount }) => {
         case 'qty':
           valA = a.qty || 0;
           valB = b.qty || 0;
+          break;
+        case 'costPrice':
+          valA = (a.qty > 0) ? (a.costBasis / a.qty) : (a.price || 0);
+          valB = (b.qty > 0) ? (b.costBasis / b.qty) : (b.price || 0);
           break;
         case 'marketValue':
           valA = a.marketValue || 0;
@@ -79,7 +84,7 @@ const LiquidationTable = ({ lots, targetAmount }) => {
 
   const handleSort = (key) => {
     setSortConfig((prev) => {
-      const defaultDesc = ['openDate', 'marketValue', 'costBasis', 'gain', 'estTax', 'qty', 'efficiency'].includes(key);
+      const defaultDesc = ['openDate', 'marketValue', 'costBasis', 'costPrice', 'gain', 'estTax', 'qty', 'efficiency'].includes(key);
       const firstDir = defaultDesc ? 'desc' : 'asc';
       const secondDir = defaultDesc ? 'asc' : 'desc';
 
@@ -131,6 +136,9 @@ const LiquidationTable = ({ lots, targetAmount }) => {
               <th onClick={() => handleSort('qty')} className="sortable-th">
                 Qty {renderSortIcon('qty')}
               </th>
+              <th onClick={() => handleSort('costPrice')} className="sortable-th">
+                Cost Price {renderSortIcon('costPrice')}
+              </th>
               <th onClick={() => handleSort('marketValue')} className="sortable-th">
                 Proceeds {renderSortIcon('marketValue')}
               </th>
@@ -156,6 +164,7 @@ const LiquidationTable = ({ lots, targetAmount }) => {
           </thead>
           <tbody>
             {sortedLots.map((lot, i) => {
+              const costPrice = (lot.qty > 0) ? (lot.costBasis / lot.qty) : (lot.price || 0);
               const gain = (lot.marketValue || 0) - (lot.costBasis || 0);
               const estTax = getLotEstTax(lot);
               const efficiencyPct = (lot.efficiency || 0) * 100;
@@ -164,6 +173,7 @@ const LiquidationTable = ({ lots, targetAmount }) => {
                 <tr key={lot.id || `${lot.symbol}-${lot.openDate}-${i}`}>
                   <td>{lot.symbol}</td>
                   <td>{lot.qty.toFixed(3)}</td>
+                  <td>${costPrice.toFixed(2)}</td>
                   <td>{formatCurrency(lot.marketValue)}</td>
                   <td>{formatCurrency(lot.costBasis)}</td>
                   <td className={gain >= 0 ? 'positive' : 'negative'}>{formatCurrency(gain)}</td>
@@ -177,9 +187,10 @@ const LiquidationTable = ({ lots, targetAmount }) => {
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan="2"><strong>Totals</strong></td>
+              <td colSpan="3"><strong>Totals</strong></td>
               <td><strong>{formatCurrency(totalProceeds)}</strong></td>
-              <td colSpan="4"></td>
+              <td><strong>{formatCurrency(totalCostBasis)}</strong></td>
+              <td colSpan="3"></td>
               <td className="negative"><strong>{formatCurrency(totalTax)}</strong></td>
               <td></td>
             </tr>
