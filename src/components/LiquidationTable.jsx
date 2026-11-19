@@ -102,17 +102,8 @@ const LiquidationTable = ({ lots, targetAmount }) => {
 
   return (
     <div className="card table-card" style={{ marginTop: '2rem' }}>
-      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <h3>Optimal Liquidation Plan</h3>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-            {sortConfig.key ? (
-              <span>(Sorted by {sortConfig.key === 'openDate' ? 'Open Date' : sortConfig.key}: {sortConfig.direction === 'asc' ? 'oldest/lowest' : 'newest/highest'})</span>
-            ) : (
-              <span>(Default: Optimal Order)</span>
-            )}
-          </span>
-        </div>
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h3>Optimal Liquidation Plan</h3>
         {sortConfig.key && (
           <button
             onClick={() => setSortConfig({ key: null, direction: null })}
